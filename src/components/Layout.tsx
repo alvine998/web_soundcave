@@ -16,6 +16,8 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Analytics', path: '/analytics', icon: '📈' },
     { name: 'Music', path: '/music', icon: '🎵' },
     { name: 'Albums', path: '/albums', icon: '💿' },
+    { name: 'Music Videos', path: '/music-videos', icon: '🎬' },
+    { name: 'Podcasts', path: '/podcasts', icon: '🎙️' },
     { name: 'Playlists', path: '/playlists', icon: '🎧' },
     { name: 'Artists', path: '/artists', icon: '🎤' },
     { name: 'Genres', path: '/genres', icon: '🎼' },
