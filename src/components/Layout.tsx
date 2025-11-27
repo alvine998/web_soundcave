@@ -105,9 +105,17 @@ export default function Layout({ children }: LayoutProps) {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
           {isSidebarOpen ? (
-            <h1 className="text-xl font-bold text-blue-600">SoundCave</h1>
+            <img 
+              src="/images/soundcave_logo.png" 
+              alt="SoundCave" 
+              className="h-12 w-auto"
+            />
           ) : (
-            <span className="text-2xl">🎵</span>
+            <img 
+              src="/images/soundcave_logo.png" 
+              alt="SoundCave" 
+              className="h-12 w-12 object-contain"
+            />
           )}
         </div>
 
