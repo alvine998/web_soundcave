@@ -88,6 +88,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Genres', path: '/genres', icon: '🎼' },
     { name: 'Subscriptions', path: '/subscriptions', icon: '💳' },
     { name: 'Reports', path: '/reports', icon: '📄' },
+    { name: 'About Apps', path: '/about-apps', icon: 'ℹ️' },
   ];
 
   const handleLogout = () => {
@@ -112,7 +113,7 @@ export default function Layout({ children }: LayoutProps) {
             />
           ) : (
             <img 
-              src="/images/soundcave_logo.png" 
+              src="/images/short_logo.png" 
               alt="SoundCave" 
               className="h-12 w-12 object-contain"
             />
