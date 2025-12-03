@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import Head from 'next/head';
-import Layout from '@/components/Layout';
-import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast';
+import { useEffect, useState } from "react";
+import Head from "next/head";
+import Layout from "@/components/Layout";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
+import axios from "axios";
+import { CONFIG } from "@/config";
+import { Pagination } from "@/components/Pagination";
 
 interface Genre {
   id: number;
@@ -18,60 +21,124 @@ interface Genre {
   description: string;
   songCount: number;
   createdAt: string;
+  color?: string;
 }
 
 export default function Genres() {
   const { success, error, warning } = useToast();
-  const [genres, setGenres] = useState<Genre[]>([
-    {
-      id: 1,
-      name: 'Pop',
-      description: 'Popular music with catchy melodies',
-      songCount: 1234,
-      createdAt: '2023-01-15',
-    },
-    {
-      id: 2,
-      name: 'Rock',
-      description: 'Electric guitar driven music',
-      songCount: 892,
-      createdAt: '2023-01-15',
-    },
-    {
-      id: 3,
-      name: 'Jazz',
-      description: 'Improvisational music style',
-      songCount: 456,
-      createdAt: '2023-01-15',
-    },
-    {
-      id: 4,
-      name: 'Electronic',
-      description: 'Computer-generated sounds and beats',
-      songCount: 678,
-      createdAt: '2023-01-15',
-    },
-    {
-      id: 5,
-      name: 'Hip Hop',
-      description: 'Rhythmic music with rap vocals',
-      songCount: 945,
-      createdAt: '2023-01-15',
-    },
-  ]);
+  const [genres, setGenres] = useState<Genre[]>([]);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedGenre, setSelectedGenre] = useState<Genre | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
+    name: "",
+    description: "",
   });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchGenres = async (pageParam = 1, query?: string) => {
+    try {
+      setIsLoading(true);
+
+      const url =
+        query && query.trim()
+          ? `${CONFIG.API_URL}/api/genres/search`
+          : `${CONFIG.API_URL}/api/genres`;
+
+      const params: Record<string, string | number> = {
+        page: pageParam,
+        limit: pageSize,
+      };
+      if (query && query.trim()) {
+        params.q = query.trim();
+      }
+
+      const response = await axios.get(url, { params });
+
+      if (!response.data?.success) {
+        error(
+          "Failed to Load Genres",
+          response.data?.message || "Unable to fetch genres from server."
+        );
+        return;
+      }
+
+      const items = response.data.data as Array<{
+        id: number;
+        name: string;
+        description: string;
+        color?: string;
+        created_at?: string;
+        songCount?: number;
+      }>;
+
+      const mapped: Genre[] = items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        color: item.color,
+        // backend tidak mengirim songCount, default 0 agar UI tetap jalan
+        songCount: typeof item.songCount === "number" ? item.songCount : 0,
+        createdAt: item.created_at
+          ? item.created_at.split("T")[0]
+          : new Date().toISOString().split("T")[0],
+      }));
+
+      setGenres(mapped);
+
+      // ambil info pagination dari backend
+      const apiPage = typeof response.data.page === "number" ? response.data.page : pageParam;
+      const apiLimit = typeof response.data.limit === "number" ? response.data.limit : pageSize;
+      const apiTotal =
+        typeof response.data.total === "number"
+          ? response.data.total
+          : mapped.length;
+      const apiTotalPages =
+        typeof response.data.totalPages === "number"
+          ? response.data.totalPages
+          : Math.max(1, Math.ceil(apiTotal / apiLimit));
+
+      setPage(apiPage);
+      setTotal(apiTotal);
+      setTotalPages(apiTotalPages);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "Terjadi kesalahan saat mengambil data genre.";
+      error("Failed to Load Genres", msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // initial load
+    fetchGenres(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // debounce search agar tidak terlalu banyak request
+    const timeout = setTimeout(() => {
+      const query = searchQuery.trim() || undefined;
+      // setiap ganti search, selalu mulai dari page 1
+      fetchGenres(1, query);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   const handleAddClick = () => {
-    setFormData({ name: '', description: '' });
+    setFormData({ name: "", description: "" });
     setIsAddModalOpen(true);
   };
 
@@ -89,68 +156,132 @@ export default function Genres() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newGenre: Genre = {
-        id: genres.length + 1,
+      const payload = {
         name: formData.name,
         description: formData.description,
-        songCount: 0,
-        createdAt: new Date().toISOString().split('T')[0],
+        // optional color, bisa dikembangkan nanti dari UI
+        color: undefined as string | undefined,
       };
-      setGenres([...genres, newGenre]);
-      setIsAddModalOpen(false);
-      setFormData({ name: '', description: '' });
-      success('Genre Added Successfully', `${formData.name} has been added to your genre list.`);
-    } catch (err) {
-      error('Failed to Add Genre', 'An error occurred while adding the genre. Please try again.');
-    }
-  };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedGenre) {
-      try {
-        setGenres(
-          genres.map((genre) =>
-            genre.id === selectedGenre.id
-              ? { ...genre, name: formData.name, description: formData.description }
-              : genre
-          )
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/genres`,
+        payload
+      );
+
+      if (!response.data?.success) {
+        error(
+          "Failed to Add Genre",
+          response.data?.message || "An error occurred while adding the genre."
         );
-        setIsEditModalOpen(false);
-        setSelectedGenre(null);
-        setFormData({ name: '', description: '' });
-        success('Genre Updated Successfully', `${formData.name} has been updated.`);
-      } catch (err) {
-        error('Failed to Update Genre', 'An error occurred while updating the genre. Please try again.');
+        return;
       }
+
+      await fetchGenres(1, searchQuery.trim() ? searchQuery : undefined);
+      setIsAddModalOpen(false);
+      setFormData({ name: "", description: "" });
+      success(
+        "Genre Added Successfully",
+        `${payload.name} has been added to your genre list.`
+      );
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "An error occurred while adding the genre. Please try again.";
+      error("Failed to Add Genre", msg);
     }
   };
 
-  const handleDeleteConfirm = () => {
-    if (selectedGenre) {
-      try {
-        const genreName = selectedGenre.name;
-        setGenres(genres.filter((genre) => genre.id !== selectedGenre.id));
-        setIsDeleteModalOpen(false);
-        setSelectedGenre(null);
-        warning('Genre Deleted', `${genreName} has been removed from your genre list.`);
-      } catch (err) {
-        error('Failed to Delete Genre', 'An error occurred while deleting the genre. Please try again.');
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGenre) return;
+
+    try {
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        color: selectedGenre.color,
+      };
+
+      const response = await axios.put(
+        `${CONFIG.API_URL}/api/genres/${selectedGenre.id}`,
+        payload
+      );
+
+      if (!response.data?.success) {
+        error(
+          "Failed to Update Genre",
+          response.data?.message ||
+            "An error occurred while updating the genre."
+        );
+        return;
       }
+
+      await fetchGenres(page, searchQuery.trim() ? searchQuery : undefined);
+      setIsEditModalOpen(false);
+      setSelectedGenre(null);
+      setFormData({ name: "", description: "" });
+      success(
+        "Genre Updated Successfully",
+        `${payload.name} has been updated.`
+      );
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "An error occurred while updating the genre. Please try again.";
+      error("Failed to Update Genre", msg);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleDeleteConfirm = async () => {
+    if (!selectedGenre) return;
+
+    try {
+      const genreName = selectedGenre.name;
+
+      const response = await axios.delete(
+        `${CONFIG.API_URL}/api/genres/${selectedGenre.id}`
+      );
+
+      if (!response.data?.success) {
+        error(
+          "Failed to Delete Genre",
+          response.data?.message ||
+            "An error occurred while deleting the genre."
+        );
+        return;
+      }
+
+      await fetchGenres(page, searchQuery.trim() ? searchQuery : undefined);
+      setIsDeleteModalOpen(false);
+      setSelectedGenre(null);
+      warning(
+        "Genre Deleted",
+        `${genreName} has been removed from your genre list.`
+      );
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "An error occurred while deleting the genre. Please try again.";
+      error("Failed to Delete Genre", msg);
+    }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const filteredGenres = genres.filter((genre) =>
-    genre.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Data sudah difilter & dipaginasi di server berdasarkan searchQuery + page
+  const filteredGenres = genres;
+  const currentPage = Math.min(page, totalPages || 1);
 
   return (
     <>
@@ -163,56 +294,12 @@ export default function Genres() {
         <div className="p-6">
           {/* Page Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Genre Management</h1>
-            <p className="text-gray-600">Kelola semua genre musik di platform Anda</p>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎵</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{genres.length}</p>
-              <p className="text-sm text-gray-600">Total Genres</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎼</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {genres.reduce((acc, genre) => acc + genre.songCount, 0).toLocaleString()}
-              </p>
-              <p className="text-sm text-gray-600">Total Songs</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">⭐</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {genres.length > 0
-                  ? genres.reduce((max, genre) => (genre.songCount > max.songCount ? genre : max))
-                      .name
-                  : '-'}
-              </p>
-              <p className="text-sm text-gray-600">Most Popular</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📊</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {genres.length > 0
-                  ? Math.round(
-                      genres.reduce((acc, genre) => acc + genre.songCount, 0) / genres.length
-                    ).toLocaleString()
-                  : 0}
-              </p>
-              <p className="text-sm text-gray-600">Avg Songs/Genre</p>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Genre Management
+            </h1>
+            <p className="text-gray-600">
+              Kelola semua genre musik di platform Anda
+            </p>
           </div>
 
           {/* Filters and Actions */}
@@ -259,9 +346,6 @@ export default function Genres() {
                 <thead className="bg-gray-50">
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Genre Name
                     </th>
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -280,18 +364,24 @@ export default function Genres() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredGenres.map((genre) => (
-                    <tr key={genre.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-4 px-6 text-sm text-gray-900">#{genre.id}</td>
+                    <tr
+                      key={genre.id}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
                       <td className="py-4 px-6">
                         <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded">
                           {genre.name}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-700">{genre.description}</td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        {genre.description}
+                      </td>
                       <td className="py-4 px-6 text-sm text-gray-900 font-medium">
                         {genre.songCount.toLocaleString()}
                       </td>
-                      <td className="py-4 px-6 text-sm text-gray-600">{genre.createdAt}</td>
+                      <td className="py-4 px-6 text-sm text-gray-600">
+                        {genre.createdAt}
+                      </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center space-x-3">
                           <button
@@ -321,6 +411,19 @@ export default function Genres() {
                 <p className="text-gray-600">No genres found</p>
               </div>
             )}
+
+            {/* Pagination */}
+            {total > 0 && (
+              <Pagination
+                total={total}
+                page={currentPage}
+                pageSize={pageSize}
+                onPageChange={(nextPage) => {
+                  const query = searchQuery.trim() || undefined;
+                  fetchGenres(nextPage, query);
+                }}
+              />
+            )}
           </div>
         </div>
       </Layout>
@@ -338,7 +441,10 @@ export default function Genres() {
 
             <div className="space-y-4 my-4">
               <div>
-                <label htmlFor="add-name" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-name"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Genre Name <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -353,7 +459,10 @@ export default function Genres() {
               </div>
 
               <div>
-                <label htmlFor="add-description" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-description"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -401,7 +510,10 @@ export default function Genres() {
 
             <div className="space-y-4 my-4">
               <div>
-                <label htmlFor="edit-name" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-name"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Genre Name <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -416,7 +528,10 @@ export default function Genres() {
               </div>
 
               <div>
-                <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-description"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -478,8 +593,8 @@ export default function Genres() {
                 <div>
                   <p className="text-sm font-medium text-red-900">Warning</p>
                   <p className="text-sm text-red-700 mt-1">
-                    This action cannot be undone. All songs associated with this genre will be
-                    affected.
+                    This action cannot be undone. All songs associated with this
+                    genre will be affected.
                   </p>
                 </div>
               </div>
@@ -488,10 +603,16 @@ export default function Genres() {
             {selectedGenre && (
               <div className="mt-4">
                 <p className="text-sm text-gray-600">
-                  Genre: <span className="font-medium text-gray-900">{selectedGenre.name}</span>
+                  Genre:{" "}
+                  <span className="font-medium text-gray-900">
+                    {selectedGenre.name}
+                  </span>
                 </p>
                 <p className="text-sm text-gray-600">
-                  Songs: <span className="font-medium text-gray-900">{selectedGenre.songCount}</span>
+                  Songs:{" "}
+                  <span className="font-medium text-gray-900">
+                    {selectedGenre.songCount}
+                  </span>
                 </p>
               </div>
             )}
@@ -518,4 +639,3 @@ export default function Genres() {
     </>
   );
 }
-
