@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
+import { useToast } from '@/components/ui/toast';
+import axios from 'axios';
+import { CONFIG } from '@/config';
 import {
   LineChart,
   Line,
@@ -18,7 +21,9 @@ import {
 export default function ArtistDetail() {
   const router = useRouter();
   const { id } = router.query;
+  const { error } = useToast();
 
+  const [isLoading, setIsLoading] = useState(true);
   const [artistData, setArtistData] = useState({
     name: '',
     genre: '',
@@ -27,46 +32,79 @@ export default function ArtistDetail() {
     phone: '',
     website: '',
     bio: '',
+    debutYear: '',
+    profileImage: '',
+    createdAt: '',
     followers: 0,
     songs: 0,
     albums: 0,
     monthlyListeners: 0,
     verified: false,
-    joinDate: '',
     socialMedia: {
       instagram: '',
       twitter: '',
       facebook: '',
-      spotify: '',
+      youtube: '',
     },
   });
 
   // Load artist data
   useEffect(() => {
-    if (id) {
-      // Simulasi load data - ganti dengan API call yang sebenarnya
-      setArtistData({
-        name: 'The Waves',
-        genre: 'Pop',
-        country: 'USA',
-        email: 'thewaves@email.com',
-        phone: '+1 234 567 8900',
-        website: 'https://thewaves.com',
-        bio: 'The Waves is a pop band known for their beach-inspired melodies and summer anthems. Formed in California, they have been making waves in the music industry since 2020. With their unique blend of pop and surf rock, they have captured the hearts of millions worldwide.',
-        followers: 125000,
-        songs: 45,
-        albums: 5,
-        monthlyListeners: 89000,
-        verified: true,
-        joinDate: '2020-03-15',
-        socialMedia: {
-          instagram: '@thewaves',
-          twitter: '@thewavesmusic',
-          facebook: 'facebook.com/thewaves',
-          spotify: 'spotify.com/artist/thewaves',
-        },
-      });
-    }
+    const fetchArtist = async () => {
+      if (!id || typeof id !== 'string') return;
+
+      try {
+        setIsLoading(true);
+        const response = await axios.get(`${CONFIG.API_URL}/api/artists/${id}`);
+
+        if (response.data?.success && response.data?.data) {
+          const artist = response.data.data;
+          setArtistData({
+            name: artist.name || '',
+            genre: artist.genre || '',
+            country: artist.country || '',
+            email: artist.email || '',
+            phone: artist.phone || '',
+            website: artist.website || '',
+            bio: artist.bio || '',
+            debutYear: artist.debutYear || '',
+            profileImage: artist.profileImage
+              ? `${CONFIG.API_URL}${artist.profileImage}`
+              : '',
+            createdAt: artist.created_at
+              ? artist.created_at.split('T')[0]
+              : '',
+            followers: 0, // Default values (bisa diambil dari API nanti jika ada)
+            songs: 0,
+            albums: 0,
+            monthlyListeners: 0,
+            verified: false,
+            socialMedia: {
+              instagram: artist.socialMedia?.instagram || '',
+              twitter: artist.socialMedia?.twitter || '',
+              facebook: artist.socialMedia?.facebook || '',
+              youtube: artist.socialMedia?.youtube || '',
+            },
+          });
+        } else {
+          error(
+            'Failed to Load Artist',
+            response.data?.message || 'Unable to fetch artist data.'
+          );
+        }
+      } catch (err: any) {
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.error?.message ||
+          'Terjadi kesalahan saat mengambil data artist.';
+        error('Failed to Load Artist', msg);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchArtist();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const weeklyListeners = [
@@ -103,33 +141,40 @@ export default function ArtistDetail() {
 
       <Layout>
         <div className="p-6">
-          {/* Header with Actions */}
-          <div className="mb-6 flex items-center justify-between">
-            <button
-              onClick={() => router.back()}
-              className="text-gray-600 hover:text-gray-900 flex items-center"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back to Artists
-            </button>
-
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => router.push(`/artists/edit/${id}`)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Edit
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Delete
-              </button>
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="mt-4 text-gray-600">Memuat data artist...</p>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Header with Actions */}
+              <div className="mb-6 flex items-center justify-between">
+                <button
+                  onClick={() => router.back()}
+                  className="text-gray-600 hover:text-gray-900 flex items-center"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back to Artists
+                </button>
+
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => router.push(`/artists/edit/${id}`)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
@@ -155,8 +200,19 @@ export default function ArtistDetail() {
                 <div className="p-6">
                   <div className="flex items-start space-x-6 mb-6">
                     {/* Profile Image */}
-                    <div className="w-28 h-28 bg-blue-100 rounded-full flex items-center justify-center shrink-0 border-4 border-white">
-                      <span className="text-5xl">🎤</span>
+                    <div className="w-28 h-28 rounded-full flex items-center justify-center shrink-0 border-4 border-white overflow-hidden bg-blue-100">
+                      {artistData.profileImage ? (
+                        <img
+                          src={artistData.profileImage}
+                          alt={artistData.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <span className={`text-5xl ${artistData.profileImage ? 'hidden' : ''}`}>🎤</span>
                     </div>
 
                     {/* Info */}
@@ -164,7 +220,7 @@ export default function ArtistDetail() {
                       <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         {artistData.name}
                       </h1>
-                      <div className="flex items-center space-x-4 text-sm text-gray-600 mb-4">
+                      <div className="flex items-center space-x-4 text-sm text-gray-600 mb-4 flex-wrap gap-2">
                         <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
                           {artistData.genre}
                         </span>
@@ -174,7 +230,12 @@ export default function ArtistDetail() {
                           </svg>
                           {artistData.country}
                         </span>
-                        <span>Joined {artistData.joinDate}</span>
+                        {artistData.debutYear && (
+                          <span>Debut: {artistData.debutYear}</span>
+                        )}
+                        {artistData.createdAt && (
+                          <span>Joined {artistData.createdAt}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -344,15 +405,15 @@ export default function ArtistDetail() {
                       <span className="text-sm text-gray-700 truncate">Facebook</span>
                     </a>
                   )}
-                  {artistData.socialMedia.spotify && (
+                  {artistData.socialMedia.youtube && (
                     <a
-                      href={`https://${artistData.socialMedia.spotify}`}
+                      href={`https://youtube.com/${artistData.socialMedia.youtube.replace('@', '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
                     >
-                      <span className="text-2xl">🎵</span>
-                      <span className="text-sm text-gray-700 truncate">Spotify</span>
+                      <span className="text-2xl">📺</span>
+                      <span className="text-sm text-gray-700 truncate">{artistData.socialMedia.youtube}</span>
                     </a>
                   )}
                 </div>
@@ -378,6 +439,8 @@ export default function ArtistDetail() {
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
       </Layout>
     </>

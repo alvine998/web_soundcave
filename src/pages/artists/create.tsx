@@ -3,9 +3,14 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
+import axios from 'axios';
+import { CONFIG } from '@/config';
+import toast from 'react-hot-toast';
 
 export default function CreateArtist() {
   const router = useRouter();
+  const { success, error } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -15,16 +20,16 @@ export default function CreateArtist() {
     phone: '',
     website: '',
     bio: '',
+    debutYear: '',
     socialMedia: {
       instagram: '',
       twitter: '',
       facebook: '',
-      spotify: '',
+      youtube: '',
     },
   });
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [coverImage, setCoverImage] = useState<File | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -52,24 +57,89 @@ export default function CreateArtist() {
     }
   };
 
-  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setCoverImage(e.target.files[0]);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulasi submit - ganti dengan API call yang sebenarnya
-    setTimeout(() => {
-      console.log('Form Data:', formData);
-      console.log('Profile Image:', profileImage);
-      console.log('Cover Image:', coverImage);
-      setIsLoading(false);
+    try {
+      // Buat FormData untuk multipart/form-data
+      const formDataToSend = new FormData();
+
+      // Required fields
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('bio', formData.bio);
+      formDataToSend.append('genre', formData.genre);
+      formDataToSend.append('country', formData.country);
+      formDataToSend.append('debutYear', formData.debutYear);
+      formDataToSend.append('email', formData.email);
+
+      // Optional fields
+      if (formData.phone) {
+        formDataToSend.append('phone', formData.phone);
+      }
+      if (formData.website) {
+        formDataToSend.append('website', formData.website);
+      }
+
+      // Social Media sebagai JSON string
+      const socialMediaObj: Record<string, string> = {};
+      if (formData.socialMedia.instagram) {
+        socialMediaObj.instagram = formData.socialMedia.instagram;
+      }
+      if (formData.socialMedia.twitter) {
+        socialMediaObj.twitter = formData.socialMedia.twitter;
+      }
+      if (formData.socialMedia.facebook) {
+        socialMediaObj.facebook = formData.socialMedia.facebook;
+      }
+      if (formData.socialMedia.youtube) {
+        socialMediaObj.youtube = formData.socialMedia.youtube;
+      }
+
+      if (Object.keys(socialMediaObj).length > 0) {
+        formDataToSend.append('socialMedia', JSON.stringify(socialMediaObj));
+      }
+
+      // Profile Image (binary)
+      if (profileImage) {
+        formDataToSend.append('profileImage', profileImage);
+      }
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/artists`,
+        formDataToSend,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      if (!response.data?.success) {
+        const errorMsg =
+          response.data?.message ||
+          'An error occurred while adding the artist.';
+        error('Failed to Add Artist', errorMsg);
+        toast.error(errorMsg);
+        return;
+      }
+
+      success(
+        'Artist Added Successfully',
+        `${formData.name} has been added to your artist list.`
+      );
+      toast.success('Artist berhasil ditambahkan!');
       router.push('/artists');
-    }, 2000);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'An error occurred while adding the artist. Please try again.';
+      error('Failed to Add Artist', msg);
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const genres = ['Pop', 'Rock', 'Jazz', 'Electronic', 'Hip Hop', 'Classical', 'Ambient', 'R&B', 'Country'];
@@ -106,62 +176,31 @@ export default function CreateArtist() {
             <div className="space-y-6">
               {/* Images Upload */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Images</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Profile Image</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Profile Image */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Profile Photo <span className="text-red-500">*</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Profile Photo
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors max-w-md">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfileImageChange}
+                      className="hidden"
+                      id="profile-upload"
+                    />
+                    <label htmlFor="profile-upload" className="cursor-pointer">
+                      <div className="text-4xl mb-2">👤</div>
+                      {profileImage ? (
+                        <p className="text-sm text-gray-900 font-medium">{profileImage.name}</p>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-600">Click to upload profile photo</p>
+                          <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
+                        </>
+                      )}
                     </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleProfileImageChange}
-                        className="hidden"
-                        id="profile-upload"
-                        required
-                      />
-                      <label htmlFor="profile-upload" className="cursor-pointer">
-                        <div className="text-4xl mb-2">👤</div>
-                        {profileImage ? (
-                          <p className="text-sm text-gray-900 font-medium">{profileImage.name}</p>
-                        ) : (
-                          <>
-                            <p className="text-sm text-gray-600">Click to upload profile photo</p>
-                            <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
-                          </>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Cover Image */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cover Photo
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverImageChange}
-                        className="hidden"
-                        id="cover-upload"
-                      />
-                      <label htmlFor="cover-upload" className="cursor-pointer">
-                        <div className="text-4xl mb-2">🖼️</div>
-                        {coverImage ? (
-                          <p className="text-sm text-gray-900 font-medium">{coverImage.name}</p>
-                        ) : (
-                          <>
-                            <p className="text-sm text-gray-600">Click to upload cover photo</p>
-                            <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 10MB</p>
-                          </>
-                        )}
-                      </label>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -223,6 +262,25 @@ export default function CreateArtist() {
                       onChange={handleChange}
                       placeholder="e.g. USA, UK, Indonesia"
                     />
+                  </div>
+
+                  {/* Debut Year */}
+                  <div>
+                    <label htmlFor="debutYear" className="block text-sm font-medium text-gray-700 mb-2">
+                      Debut Year <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      id="debutYear"
+                      name="debutYear"
+                      type="text"
+                      required
+                      value={formData.debutYear}
+                      onChange={handleChange}
+                      placeholder="2020"
+                      pattern="^\d{4}$"
+                      maxLength={4}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Format: YYYY (e.g. 2020)</p>
                   </div>
 
                   {/* Email */}
@@ -340,18 +398,18 @@ export default function CreateArtist() {
                     />
                   </div>
 
-                  {/* Spotify */}
+                  {/* YouTube */}
                   <div>
-                    <label htmlFor="social_spotify" className="block text-sm font-medium text-gray-700 mb-2">
-                      Spotify
+                    <label htmlFor="social_youtube" className="block text-sm font-medium text-gray-700 mb-2">
+                      YouTube
                     </label>
                     <Input
-                      id="social_spotify"
-                      name="social_spotify"
+                      id="social_youtube"
+                      name="social_youtube"
                       type="text"
-                      value={formData.socialMedia.spotify}
+                      value={formData.socialMedia.youtube}
                       onChange={handleChange}
-                      placeholder="spotify.com/artist/..."
+                      placeholder="@channel or channel name"
                     />
                   </div>
                 </div>

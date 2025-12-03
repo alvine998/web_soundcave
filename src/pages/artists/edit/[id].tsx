@@ -3,11 +3,17 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
+import axios from 'axios';
+import { CONFIG } from '@/config';
+import toast from 'react-hot-toast';
 
 export default function EditArtist() {
   const router = useRouter();
   const { id } = router.query;
+  const { success, error } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     genre: '',
@@ -16,37 +22,63 @@ export default function EditArtist() {
     phone: '',
     website: '',
     bio: '',
+    debutYear: '',
     socialMedia: {
       instagram: '',
       twitter: '',
       facebook: '',
-      spotify: '',
+      youtube: '',
     },
   });
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [currentProfileImage, setCurrentProfileImage] = useState<string | null>(null);
 
   // Load existing artist data
   useEffect(() => {
-    if (id) {
-      // Simulasi load data - ganti dengan API call yang sebenarnya
-      setFormData({
-        name: 'The Waves',
-        genre: 'Pop',
-        country: 'USA',
-        email: 'thewaves@email.com',
-        phone: '+1 234 567 8900',
-        website: 'https://thewaves.com',
-        bio: 'The Waves is a pop band known for their beach-inspired melodies and summer anthems. Formed in California, they have been making waves in the music industry since 2020.',
-        socialMedia: {
-          instagram: '@thewaves',
-          twitter: '@thewavesmusic',
-          facebook: 'facebook.com/thewaves',
-          spotify: 'spotify.com/artist/thewaves',
-        },
-      });
-    }
+    const fetchArtist = async () => {
+      if (!id || typeof id !== 'string') return;
+
+      try {
+        setIsLoadingData(true);
+        const response = await axios.get(`${CONFIG.API_URL}/api/artists/${id}`);
+
+        if (response.data?.success && response.data?.data) {
+          const artist = response.data.data;
+          setFormData({
+            name: artist.name || '',
+            genre: artist.genre || '',
+            country: artist.country || '',
+            email: artist.email || '',
+            phone: artist.phone || '',
+            website: artist.website || '',
+            bio: artist.bio || '',
+            debutYear: artist.debutYear || '',
+            socialMedia: {
+              instagram: artist.socialMedia?.instagram || '',
+              twitter: artist.socialMedia?.twitter || '',
+              facebook: artist.socialMedia?.facebook || '',
+              youtube: artist.socialMedia?.youtube || '',
+            },
+          });
+          if (artist.profileImage) {
+            setCurrentProfileImage(`${CONFIG.API_URL}${artist.profileImage}`);
+          }
+        }
+      } catch (err: any) {
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.error?.message ||
+          'Failed to load artist data.';
+        error('Failed to Load Artist', msg);
+        toast.error(msg);
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    fetchArtist();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -75,24 +107,85 @@ export default function EditArtist() {
     }
   };
 
-  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setCoverImage(e.target.files[0]);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!id || typeof id !== 'string') return;
+
     setIsLoading(true);
 
-    // Simulasi update - ganti dengan API call yang sebenarnya
-    setTimeout(() => {
-      console.log('Updated Data:', formData);
-      console.log('Profile Image:', profileImage);
-      console.log('Cover Image:', coverImage);
-      setIsLoading(false);
+    try {
+      // Buat FormData untuk multipart/form-data
+      const formDataToSend = new FormData();
+
+      // Fields (semua optional untuk update)
+      if (formData.name) formDataToSend.append('name', formData.name);
+      if (formData.bio) formDataToSend.append('bio', formData.bio);
+      if (formData.genre) formDataToSend.append('genre', formData.genre);
+      if (formData.country) formDataToSend.append('country', formData.country);
+      if (formData.debutYear) formDataToSend.append('debutYear', formData.debutYear);
+      if (formData.email) formDataToSend.append('email', formData.email);
+      if (formData.phone) formDataToSend.append('phone', formData.phone);
+      if (formData.website) formDataToSend.append('website', formData.website);
+
+      // Social Media sebagai JSON string
+      const socialMediaObj: Record<string, string> = {};
+      if (formData.socialMedia.instagram) {
+        socialMediaObj.instagram = formData.socialMedia.instagram;
+      }
+      if (formData.socialMedia.twitter) {
+        socialMediaObj.twitter = formData.socialMedia.twitter;
+      }
+      if (formData.socialMedia.facebook) {
+        socialMediaObj.facebook = formData.socialMedia.facebook;
+      }
+      if (formData.socialMedia.youtube) {
+        socialMediaObj.youtube = formData.socialMedia.youtube;
+      }
+
+      if (Object.keys(socialMediaObj).length > 0) {
+        formDataToSend.append('socialMedia', JSON.stringify(socialMediaObj));
+      }
+
+      // Profile Image (binary) - hanya kirim jika ada file baru
+      if (profileImage) {
+        formDataToSend.append('profileImage', profileImage);
+      }
+
+      const response = await axios.put(
+        `${CONFIG.API_URL}/api/artists/${id}`,
+        formDataToSend,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      if (!response.data?.success) {
+        const errorMsg =
+          response.data?.message ||
+          'An error occurred while updating the artist.';
+        error('Failed to Update Artist', errorMsg);
+        toast.error(errorMsg);
+        return;
+      }
+
+      success(
+        'Artist Updated Successfully',
+        `${formData.name} has been updated.`
+      );
+      toast.success('Artist berhasil diperbarui!');
       router.push('/artists');
-    }, 2000);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'An error occurred while updating the artist. Please try again.';
+      error('Failed to Update Artist', msg);
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const genres = ['Pop', 'Rock', 'Jazz', 'Electronic', 'Hip Hop', 'Classical', 'Ambient', 'R&B', 'Country'];
@@ -124,82 +217,68 @@ export default function EditArtist() {
             </div>
           </div>
 
-          {/* Current Info Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-blue-900">Current Images</p>
-                <p className="text-xs text-blue-700 mt-1">Upload new images only if you want to replace the existing ones</p>
-              </div>
+          {isLoadingData ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="mt-4 text-gray-600">Memuat data artist...</p>
             </div>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
-              {/* Images Upload */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Replace Images (Optional)</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Profile Image */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Profile Photo
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleProfileImageChange}
-                        className="hidden"
-                        id="profile-upload"
-                      />
-                      <label htmlFor="profile-upload" className="cursor-pointer">
-                        <div className="text-4xl mb-2">👤</div>
-                        {profileImage ? (
-                          <p className="text-sm text-gray-900 font-medium">{profileImage.name}</p>
-                        ) : (
-                          <>
-                            <p className="text-sm text-gray-600">Click to replace profile photo</p>
-                            <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
-                          </>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Cover Image */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cover Photo
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverImageChange}
-                        className="hidden"
-                        id="cover-upload"
-                      />
-                      <label htmlFor="cover-upload" className="cursor-pointer">
-                        <div className="text-4xl mb-2">🖼️</div>
-                        {coverImage ? (
-                          <p className="text-sm text-gray-900 font-medium">{coverImage.name}</p>
-                        ) : (
-                          <>
-                            <p className="text-sm text-gray-600">Click to replace cover photo</p>
-                            <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 10MB</p>
-                          </>
-                        )}
-                      </label>
+          ) : (
+            <>
+              {/* Current Info Notice */}
+              {currentProfileImage && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">Current Profile Image</p>
+                      <p className="text-xs text-blue-700 mt-1">Upload new image only if you want to replace the existing one</p>
+                      {currentProfileImage && (
+                        <img
+                          src={currentProfileImage}
+                          alt="Current profile"
+                          className="mt-2 w-24 h-24 object-cover rounded-lg"
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* Form */}
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-6">
+                  {/* Images Upload */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Replace Profile Image (Optional)</h2>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Profile Photo
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors max-w-md">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleProfileImageChange}
+                          className="hidden"
+                          id="profile-upload"
+                        />
+                        <label htmlFor="profile-upload" className="cursor-pointer">
+                          <div className="text-4xl mb-2">👤</div>
+                          {profileImage ? (
+                            <p className="text-sm text-gray-900 font-medium">{profileImage.name}</p>
+                          ) : (
+                            <>
+                              <p className="text-sm text-gray-600">Click to replace profile photo</p>
+                              <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
+                            </>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+                  </div>
 
               {/* Basic Information */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -258,6 +337,24 @@ export default function EditArtist() {
                       onChange={handleChange}
                       placeholder="e.g. USA, UK, Indonesia"
                     />
+                  </div>
+
+                  {/* Debut Year */}
+                  <div>
+                    <label htmlFor="debutYear" className="block text-sm font-medium text-gray-700 mb-2">
+                      Debut Year
+                    </label>
+                    <Input
+                      id="debutYear"
+                      name="debutYear"
+                      type="text"
+                      value={formData.debutYear}
+                      onChange={handleChange}
+                      placeholder="2020"
+                      pattern="^\d{4}$"
+                      maxLength={4}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Format: YYYY (e.g. 2020)</p>
                   </div>
 
                   {/* Email */}
@@ -375,18 +472,18 @@ export default function EditArtist() {
                     />
                   </div>
 
-                  {/* Spotify */}
+                  {/* YouTube */}
                   <div>
-                    <label htmlFor="social_spotify" className="block text-sm font-medium text-gray-700 mb-2">
-                      Spotify
+                    <label htmlFor="social_youtube" className="block text-sm font-medium text-gray-700 mb-2">
+                      YouTube
                     </label>
                     <Input
-                      id="social_spotify"
-                      name="social_spotify"
+                      id="social_youtube"
+                      name="social_youtube"
                       type="text"
-                      value={formData.socialMedia.spotify}
+                      value={formData.socialMedia.youtube}
                       onChange={handleChange}
-                      placeholder="spotify.com/artist/..."
+                      placeholder="@channel or channel name"
                     />
                   </div>
                 </div>
@@ -421,6 +518,8 @@ export default function EditArtist() {
               </div>
             </div>
           </form>
+            </>
+          )}
         </div>
       </Layout>
     </>
