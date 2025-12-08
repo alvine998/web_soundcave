@@ -69,6 +69,10 @@ export default function MusicVideos() {
   );
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
   const [isLoadingGenres, setIsLoadingGenres] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
 
   // Helper function untuk mendapatkan token dari localStorage
   const getAuthToken = (): string | null => {
@@ -87,6 +91,65 @@ export default function MusicVideos() {
         "Content-Type": "application/json",
       },
     };
+  };
+
+  // Upload video function
+  const uploadVideo = async (file: File) => {
+    try {
+      setIsUploadingVideo(true);
+      const token = getAuthToken();
+
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
+      formDataUpload.append("folder", "music-videos");
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/music-videos/upload`,
+        formDataUpload,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        const uploadedUrl = response.data.data.file_url;
+        setVideoUrl(uploadedUrl);
+        toast.success(response.data?.message || "Video uploaded successfully");
+      } else {
+        throw new Error(response.data?.message || "Failed to upload video");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "Failed to upload video. Please try again.";
+      error("Failed to Upload Video", msg);
+      toast.error(msg);
+      setVideoFile(null);
+      setVideoPreview(null);
+    } finally {
+      setIsUploadingVideo(false);
+    }
+  };
+
+  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setVideoFile(file);
+
+      // Create preview for video
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setVideoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload video immediately
+      await uploadVideo(file);
+    }
   };
 
   // Fetch music videos from API
@@ -255,6 +318,9 @@ export default function MusicVideos() {
       video_url: "",
       thumbnail: "",
     });
+    setVideoFile(null);
+    setVideoUrl(null);
+    setVideoPreview(null);
     setIsAddModalOpen(true);
   };
 
@@ -271,6 +337,9 @@ export default function MusicVideos() {
       video_url: video.video_url,
       thumbnail: video.thumbnail || "",
     });
+    setVideoFile(null);
+    setVideoUrl(null);
+    setVideoPreview(video.video_url || null);
     setIsEditModalOpen(true);
   };
 
@@ -284,6 +353,14 @@ export default function MusicVideos() {
     try {
       const token = getAuthToken();
 
+      // Use uploaded video URL if available, otherwise use manual input
+      const videoUrlToUse = videoUrl || formData.video_url || "";
+      
+      if (!videoUrlToUse) {
+        toast.error("Please upload a video file or enter a video URL");
+        return;
+      }
+
       const payload = {
         title: formData.title,
         artist:
@@ -294,7 +371,7 @@ export default function MusicVideos() {
         release_date: formData.release_date,
         duration: formData.duration,
         description: formData.description || null,
-        video_url: formData.video_url || "",
+        video_url: videoUrlToUse,
         thumbnail: formData.thumbnail || null,
       };
 
@@ -322,6 +399,9 @@ export default function MusicVideos() {
           video_url: "",
           thumbnail: "",
         });
+        setVideoFile(null);
+        setVideoUrl(null);
+        setVideoPreview(null);
         success(
           "Music Video Added",
           `${formData.title} has been added successfully.`
@@ -347,6 +427,9 @@ export default function MusicVideos() {
     try {
       const token = getAuthToken();
 
+      // Use uploaded video URL if available, otherwise use manual input, or keep existing video URL for edit
+      const videoUrlToUse = videoUrl || formData.video_url || selectedVideo.video_url;
+
       const payload = {
         title: formData.title,
         artist:
@@ -357,7 +440,7 @@ export default function MusicVideos() {
         release_date: formData.release_date,
         duration: formData.duration,
         description: formData.description || null,
-        video_url: formData.video_url || "",
+        video_url: videoUrlToUse,
         thumbnail: formData.thumbnail || null,
       };
 
@@ -386,6 +469,9 @@ export default function MusicVideos() {
           video_url: "",
           thumbnail: "",
         });
+        setVideoFile(null);
+        setVideoUrl(null);
+        setVideoPreview(null);
         success("Video Updated", `${formData.title} has been updated.`);
         toast.success("Music video berhasil diperbarui!");
         fetchMusicVideos(page, searchQuery);
@@ -766,20 +852,56 @@ export default function MusicVideos() {
 
               <div className="md:col-span-2">
                 <label
-                  htmlFor="add-video-url"
+                  htmlFor="add-video-file"
                   className="block text-sm font-medium text-gray-700 mb-2"
                 >
-                  Video URL <span className="text-red-500">*</span>
+                  Video File <span className="text-red-500">*</span>
                 </label>
-                <Input
-                  id="add-video-url"
-                  name="video_url"
-                  type="url"
-                  required
-                  value={formData.video_url}
-                  onChange={handleChange}
-                  placeholder="https://youtube.com/watch?v=..."
+                <input
+                  id="add-video-file"
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoChange}
+                  disabled={isUploadingVideo}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
+                {isUploadingVideo && (
+                  <p className="mt-2 text-sm text-blue-600">
+                    Uploading video...
+                  </p>
+                )}
+                {videoUrl && !isUploadingVideo && (
+                  <p className="mt-2 text-sm text-green-600">
+                    ✓ Video uploaded successfully
+                  </p>
+                )}
+                {videoPreview && (
+                  <div className="mt-4">
+                    <video
+                      src={videoPreview}
+                      controls
+                      className="w-full max-w-md rounded-lg"
+                    />
+                  </div>
+                )}
+                {!videoPreview && (
+                  <div className="mt-2">
+                    <label
+                      htmlFor="add-video-url"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Atau masukkan Video URL
+                    </label>
+                    <Input
+                      id="add-video-url"
+                      name="video_url"
+                      type="url"
+                      value={formData.video_url}
+                      onChange={handleChange}
+                      placeholder="https://youtube.com/watch?v=..."
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -954,20 +1076,56 @@ export default function MusicVideos() {
 
               <div className="md:col-span-2">
                 <label
-                  htmlFor="edit-video-url"
+                  htmlFor="edit-video-file"
                   className="block text-sm font-medium text-gray-700 mb-2"
                 >
-                  Video URL <span className="text-red-500">*</span>
+                  Video File
                 </label>
-                <Input
-                  id="edit-video-url"
-                  name="video_url"
-                  type="url"
-                  required
-                  value={formData.video_url}
-                  onChange={handleChange}
-                  placeholder="https://youtube.com/watch?v=..."
+                <input
+                  id="edit-video-file"
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoChange}
+                  disabled={isUploadingVideo}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
+                {isUploadingVideo && (
+                  <p className="mt-2 text-sm text-blue-600">
+                    Uploading video...
+                  </p>
+                )}
+                {videoUrl && !isUploadingVideo && (
+                  <p className="mt-2 text-sm text-green-600">
+                    ✓ Video uploaded successfully
+                  </p>
+                )}
+                {videoPreview && (
+                  <div className="mt-4">
+                    <video
+                      src={videoPreview}
+                      controls
+                      className="w-full max-w-md rounded-lg"
+                    />
+                  </div>
+                )}
+                {!videoPreview && (
+                  <div className="mt-2">
+                    <label
+                      htmlFor="edit-video-url"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Atau masukkan Video URL
+                    </label>
+                    <Input
+                      id="edit-video-url"
+                      name="video_url"
+                      type="url"
+                      value={formData.video_url}
+                      onChange={handleChange}
+                      placeholder="https://youtube.com/watch?v=..."
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">

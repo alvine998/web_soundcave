@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  web_soundcave:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web_soundcave
+    ports:
+      - "3050:3050"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_BASE_URL_API=${NEXT_PUBLIC_BASE_URL_API:-http://localhost:6002}
+    restart: unless-stopped
+    networks:
+      - soundcave_network
+
+networks:
+  soundcave_network:
+    driver: bridge

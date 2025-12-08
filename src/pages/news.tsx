@@ -64,6 +64,10 @@ export default function News() {
     is_published: false,
     tags: "",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Helper function untuk mendapatkan token dari localStorage
   const getAuthToken = (): string | null => {
@@ -93,6 +97,65 @@ export default function News() {
     "Event",
     "News",
   ];
+
+  // Upload image function
+  const uploadImage = async (file: File) => {
+    try {
+      setIsUploadingImage(true);
+      const token = getAuthToken();
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "news");
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/images/upload`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        const uploadedUrl = response.data.data.file_url;
+        setImageUrl(uploadedUrl);
+        toast.success(response.data?.message || "Image uploaded successfully");
+      } else {
+        throw new Error(response.data?.message || "Failed to upload image");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "Failed to upload image. Please try again.";
+      error("Failed to Upload Image", msg);
+      toast.error(msg);
+      setImageFile(null);
+      setImagePreview(null);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setImageFile(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload image immediately
+      await uploadImage(file);
+    }
+  };
 
   // Fetch news from API
   const fetchNews = async (pageParam = 1, query?: string) => {
@@ -201,11 +264,33 @@ export default function News() {
       is_published: false,
       tags: "",
     });
+    setImageFile(null);
+    setImageUrl(null);
+    setImagePreview(null);
     setIsAddModalOpen(true);
   };
 
   const handleEditClick = (newsItem: News) => {
     setSelectedNews(newsItem);
+    
+    // Format published_at for datetime-local input (YYYY-MM-DDTHH:MM)
+    let publishedAtFormatted = "";
+    if (newsItem.published_at) {
+      const dateStr = newsItem.published_at;
+      // Handle both ISO format (2024-01-15T10:30:00Z) and API format (2024-01-15 10:30:00)
+      if (dateStr.includes("T")) {
+        // ISO format: 2024-01-15T10:30:00Z -> 2024-01-15T10:30
+        const datePart = dateStr.split("T")[0];
+        const timePart = dateStr.split("T")[1].split(":")[0] + ":" + dateStr.split("T")[1].split(":")[1];
+        publishedAtFormatted = `${datePart}T${timePart}`;
+      } else if (dateStr.includes(" ")) {
+        // API format: 2024-01-15 10:30:00 -> 2024-01-15T10:30
+        const [datePart, timePart] = dateStr.split(" ");
+        const [hours, minutes] = timePart.split(":");
+        publishedAtFormatted = `${datePart}T${hours}:${minutes}`;
+      }
+    }
+    
     setFormData({
       title: newsItem.title,
       content: newsItem.content,
@@ -213,14 +298,13 @@ export default function News() {
       author: newsItem.author,
       category: newsItem.category,
       image_url: newsItem.image_url || "",
-      published_at: newsItem.published_at
-        ? newsItem.published_at.split("T")[0] +
-          " " +
-          newsItem.published_at.split("T")[1].split(".")[0].substring(0, 5)
-        : "",
+      published_at: publishedAtFormatted,
       is_published: newsItem.is_published,
       tags: newsItem.tags || "",
     });
+    setImageFile(null);
+    setImageUrl(null);
+    setImagePreview(newsItem.image_url || null);
     setIsEditModalOpen(true);
   };
 
@@ -245,11 +329,20 @@ export default function News() {
       if (formData.summary) {
         payload.summary = formData.summary;
       }
-      if (formData.image_url) {
+      // Use uploaded image URL if available, otherwise use manual input
+      if (imageUrl) {
+        payload.image_url = imageUrl;
+      } else if (formData.image_url) {
         payload.image_url = formData.image_url;
       }
       if (formData.published_at) {
-        payload.published_at = formData.published_at;
+        // Convert datetime-local format (YYYY-MM-DDTHH:MM) to API format (YYYY-MM-DD HH:MM:SS)
+        let publishedAt = formData.published_at;
+        if (publishedAt.includes("T")) {
+          // Replace T with space and add :00 for seconds
+          publishedAt = publishedAt.replace("T", " ") + ":00";
+        }
+        payload.published_at = publishedAt;
       }
       if (formData.tags) {
         payload.tags = formData.tags;
@@ -279,6 +372,9 @@ export default function News() {
           is_published: false,
           tags: "",
         });
+        setImageFile(null);
+        setImageUrl(null);
+        setImagePreview(null);
         success("News Added", `${formData.title} has been added successfully.`);
         toast.success("News berhasil ditambahkan!");
         fetchNews(page, searchQuery);
@@ -312,11 +408,23 @@ export default function News() {
       if (formData.summary) {
         payload.summary = formData.summary;
       }
-      if (formData.image_url) {
+      // Use uploaded image URL if available, otherwise use existing or manual input
+      if (imageUrl) {
+        payload.image_url = imageUrl;
+      } else if (formData.image_url) {
         payload.image_url = formData.image_url;
+      } else if (selectedNews.image_url) {
+        // Keep existing image if no new upload and no manual input
+        payload.image_url = selectedNews.image_url;
       }
       if (formData.published_at) {
-        payload.published_at = formData.published_at;
+        // Convert datetime-local format (YYYY-MM-DDTHH:MM) to API format (YYYY-MM-DD HH:MM:SS)
+        let publishedAt = formData.published_at;
+        if (publishedAt.includes("T")) {
+          // Replace T with space and add :00 for seconds
+          publishedAt = publishedAt.replace("T", " ") + ":00";
+        }
+        payload.published_at = publishedAt;
       }
       if (formData.tags) {
         payload.tags = formData.tags;
@@ -347,6 +455,9 @@ export default function News() {
           is_published: false,
           tags: "",
         });
+        setImageFile(null);
+        setImageUrl(null);
+        setImagePreview(null);
         success("News Updated", `${formData.title} has been updated.`);
         toast.success("News berhasil diperbarui!");
         fetchNews(page, searchQuery);
@@ -736,21 +847,79 @@ export default function News() {
                     </select>
                   </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <label
-                      htmlFor="add-image-url"
+                      htmlFor="add-image"
                       className="block text-sm font-medium text-gray-700 mb-2"
                     >
-                      Image URL
+                      Image
                     </label>
-                    <Input
-                      id="add-image-url"
-                      name="image_url"
-                      type="url"
-                      value={formData.image_url}
-                      onChange={handleChange}
-                      placeholder="https://example.com/image.jpg"
-                    />
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                        id="add-image"
+                        disabled={isUploadingImage}
+                      />
+                      <label
+                        htmlFor="add-image"
+                        className={`cursor-pointer ${isUploadingImage ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        {imagePreview ? (
+                          <div className="space-y-2">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="mx-auto h-32 w-auto object-contain rounded-lg"
+                            />
+                            {imageFile && (
+                              <p className="text-sm text-gray-900 font-medium">
+                                {imageFile.name}
+                              </p>
+                            )}
+                            {isUploadingImage && (
+                              <p className="text-xs text-blue-600">Uploading...</p>
+                            )}
+                            {imageUrl && !isUploadingImage && (
+                              <p className="text-xs text-green-600">
+                                ✓ Uploaded successfully
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-4xl mb-2">🖼️</div>
+                            <p className="text-sm text-gray-600">
+                              Click to upload image
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              JPG, PNG up to 5MB
+                            </p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                    {!imagePreview && (
+                      <div className="mt-2">
+                        <label
+                          htmlFor="add-image-url"
+                          className="block text-xs font-medium text-gray-500 mb-1"
+                        >
+                          Or enter image URL
+                        </label>
+                        <Input
+                          id="add-image-url"
+                          name="image_url"
+                          type="url"
+                          value={formData.image_url}
+                          onChange={handleChange}
+                          placeholder="https://example.com/image.jpg"
+                          className="text-sm"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -927,21 +1096,79 @@ export default function News() {
                     </select>
                   </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <label
-                      htmlFor="edit-image-url"
+                      htmlFor="edit-image"
                       className="block text-sm font-medium text-gray-700 mb-2"
                     >
-                      Image URL
+                      Image
                     </label>
-                    <Input
-                      id="edit-image-url"
-                      name="image_url"
-                      type="url"
-                      value={formData.image_url}
-                      onChange={handleChange}
-                      placeholder="https://example.com/image.jpg"
-                    />
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                        id="edit-image"
+                        disabled={isUploadingImage}
+                      />
+                      <label
+                        htmlFor="edit-image"
+                        className={`cursor-pointer ${isUploadingImage ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        {imagePreview ? (
+                          <div className="space-y-2">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="mx-auto h-32 w-auto object-contain rounded-lg"
+                            />
+                            {imageFile && (
+                              <p className="text-sm text-gray-900 font-medium">
+                                {imageFile.name}
+                              </p>
+                            )}
+                            {isUploadingImage && (
+                              <p className="text-xs text-blue-600">Uploading...</p>
+                            )}
+                            {imageUrl && !isUploadingImage && (
+                              <p className="text-xs text-green-600">
+                                ✓ Uploaded successfully
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-4xl mb-2">🖼️</div>
+                            <p className="text-sm text-gray-600">
+                              Click to upload image
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              JPG, PNG up to 5MB
+                            </p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                    {!imagePreview && (
+                      <div className="mt-2">
+                        <label
+                          htmlFor="edit-image-url"
+                          className="block text-xs font-medium text-gray-500 mb-1"
+                        >
+                          Or enter image URL
+                        </label>
+                        <Input
+                          id="edit-image-url"
+                          name="image_url"
+                          type="url"
+                          value={formData.image_url}
+                          onChange={handleChange}
+                          placeholder="https://example.com/image.jpg"
+                          className="text-sm"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div>
