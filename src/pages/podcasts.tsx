@@ -224,47 +224,6 @@ export default function Podcasts() {
             <p className="text-gray-600">Kelola semua podcast di platform Anda</p>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎙️</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{podcasts.length}</p>
-              <p className="text-sm text-gray-600">Total Episodes</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">👂</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {(podcasts.reduce((acc, p) => acc + p.listens, 0) / 1000).toFixed(0)}K
-              </p>
-              <p className="text-sm text-gray-600">Total Listens</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎯</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {categories.length}
-              </p>
-              <p className="text-sm text-gray-600">Categories</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📅</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {new Date().getFullYear()}
-              </p>
-              <p className="text-sm text-gray-600">Current Year</p>
-            </div>
-          </div>
-
           {/* Search and Filters */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

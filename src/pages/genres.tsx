@@ -28,6 +28,25 @@ export default function Genres() {
   const { success, error, warning } = useToast();
   const [genres, setGenres] = useState<Genre[]>([]);
 
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
+    }
+    return null;
+  };
+
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
+  };
+
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -47,10 +66,7 @@ export default function Genres() {
     try {
       setIsLoading(true);
 
-      const url =
-        query && query.trim()
-          ? `${CONFIG.API_URL}/api/genres/search`
-          : `${CONFIG.API_URL}/api/genres`;
+      const url = `${CONFIG.API_URL}/api/genres?search=${query || ""}`;
 
       const params: Record<string, string | number> = {
         page: pageParam,
@@ -60,7 +76,10 @@ export default function Genres() {
         params.q = query.trim();
       }
 
-      const response = await axios.get(url, { params });
+      const response = await axios.get(url, {
+        params,
+        ...getAuthHeaders(),
+      });
 
       if (!response.data?.success) {
         error(
@@ -74,7 +93,7 @@ export default function Genres() {
         id: number;
         name: string;
         description: string;
-        color?: string;
+        color?: string | null;
         created_at?: string;
         songCount?: number;
       }>;
@@ -83,7 +102,7 @@ export default function Genres() {
         id: item.id,
         name: item.name,
         description: item.description,
-        color: item.color,
+        color: item.color || undefined,
         // backend tidak mengirim songCount, default 0 agar UI tetap jalan
         songCount: typeof item.songCount === "number" ? item.songCount : 0,
         createdAt: item.created_at
@@ -93,16 +112,17 @@ export default function Genres() {
 
       setGenres(mapped);
 
-      // ambil info pagination dari backend
-      const apiPage = typeof response.data.page === "number" ? response.data.page : pageParam;
-      const apiLimit = typeof response.data.limit === "number" ? response.data.limit : pageSize;
+      // ambil info pagination dari backend (struktur baru dengan object pagination)
+      const pagination = response.data.pagination || {};
+      const apiPage =
+        typeof pagination.page === "number" ? pagination.page : pageParam;
+      const apiLimit =
+        typeof pagination.limit === "number" ? pagination.limit : pageSize;
       const apiTotal =
-        typeof response.data.total === "number"
-          ? response.data.total
-          : mapped.length;
+        typeof pagination.total === "number" ? pagination.total : mapped.length;
       const apiTotalPages =
-        typeof response.data.totalPages === "number"
-          ? response.data.totalPages
+        typeof pagination.pages === "number"
+          ? pagination.pages
           : Math.max(1, Math.ceil(apiTotal / apiLimit));
 
       setPage(apiPage);
@@ -168,7 +188,8 @@ export default function Genres() {
 
       const response = await axios.post(
         `${CONFIG.API_URL}/api/genres`,
-        payload
+        payload,
+        getAuthHeaders()
       );
 
       if (!response.data?.success) {
@@ -208,7 +229,8 @@ export default function Genres() {
 
       const response = await axios.put(
         `${CONFIG.API_URL}/api/genres/${selectedGenre.id}`,
-        payload
+        payload,
+        getAuthHeaders()
       );
 
       if (!response.data?.success) {
@@ -244,7 +266,8 @@ export default function Genres() {
       const genreName = selectedGenre.name;
 
       const response = await axios.delete(
-        `${CONFIG.API_URL}/api/genres/${selectedGenre.id}`
+        `${CONFIG.API_URL}/api/genres/${selectedGenre.id}`,
+        getAuthHeaders()
       );
 
       if (!response.data?.success) {

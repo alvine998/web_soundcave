@@ -1,23 +1,138 @@
-import { useState } from 'react';
-import Head from 'next/head';
-import Layout from '@/components/Layout';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect } from "react";
+import Head from "next/head";
+import Layout from "@/components/Layout";
+import { Input } from "@/components/ui/input";
+import axios from "axios";
+import { CONFIG } from "@/config";
+import toast from "react-hot-toast";
 import {
   BarChart,
   Bar,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from 'recharts';
+} from "recharts";
+
+interface CustomerReport {
+  period: {
+    days: number;
+    start_date: string;
+    end_date: string;
+    previous_start: string;
+    previous_end: string;
+  };
+  user_statistics: {
+    total_users: number;
+    premium_users: number;
+    regular_users: number;
+    admin_users: number;
+    current_period_new_users: number;
+    previous_period_new_users: number;
+    user_growth_percent: number;
+    premium_growth_percent: number;
+    daily_growth: Array<{ date: string; count: number }>;
+    monthly_growth: Array<{ month: string; count: number }>;
+    user_distribution: {
+      premium: number;
+      regular: number;
+      admin: number;
+      premium_percentage: number;
+    };
+  };
+  revenue: {
+    estimated_monthly_revenue: number;
+    estimated_annual_revenue: number;
+    revenue_growth_percent: number;
+    premium_subscribers: number;
+    currency: string;
+  };
+  conversion_metrics: {
+    conversion_rate: number;
+    total_users: number;
+    premium_users: number;
+    regular_users: number;
+    current_period_premium: number;
+    previous_period_premium: number;
+  };
+  engagement_metrics: {
+    total_playlists: number;
+    total_playlist_songs: number;
+    avg_playlists_per_user: number;
+    avg_songs_per_playlist: number;
+    active_users: number;
+    retention_rate: number;
+  };
+}
 
 export default function Reports() {
-  const [reportType, setReportType] = useState('customers');
-  const [dateRange, setDateRange] = useState('30days');
+  const [reportType, setReportType] = useState("customers");
+  const [period, setPeriod] = useState(30);
+  const [isLoading, setIsLoading] = useState(true);
+  const [reportData, setReportData] = useState<CustomerReport | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
+    }
+    return null;
+  };
+
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
+  };
+
+  // Fetch customer report
+  const fetchCustomerReport = async (periodDays: number = 30) => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get(
+        `${CONFIG.API_URL}/api/dashboard/customer-report`,
+        {
+          params: {
+            period: periodDays,
+          },
+          ...getAuthHeaders(),
+        }
+      );
+
+      if (response.data?.success && response.data?.data) {
+        setReportData(response.data.data);
+      } else {
+        toast.error("Failed to load customer report");
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch customer report:", err);
+      const msg =
+        err?.response?.data?.message ||
+        "Failed to load customer report. Please try again.";
+      toast.error(msg);
+      setReportData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomerReport(period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   const customers = [
     {
@@ -77,51 +192,80 @@ export default function Reports() {
     },
   ];
 
-  const revenueData = [
-    { month: 'Jan', revenue: 12400, customers: 120 },
-    { month: 'Feb', revenue: 14200, customers: 145 },
-    { month: 'Mar', revenue: 16800, customers: 168 },
-    { month: 'Apr', revenue: 15600, customers: 156 },
-    { month: 'May', revenue: 18900, customers: 189 },
-    { month: 'Jun', revenue: 21200, customers: 212 },
-  ];
+  // Format data untuk charts
+  const dailyGrowthData = reportData?.user_statistics.daily_growth.map(
+    (item) => ({
+      date: new Date(item.date).toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+      }),
+      count: item.count,
+    })
+  ) || [];
 
-  const subscriptionData = [
-    { plan: 'Free', count: 450 },
-    { plan: 'Basic', count: 280 },
-    { plan: 'Premium', count: 520 },
-  ];
+  const monthlyGrowthData = reportData?.user_statistics.monthly_growth.map(
+    (item) => ({
+      month: new Date(item.month + "-01").toLocaleDateString("id-ID", {
+        month: "short",
+        year: "numeric",
+      }),
+      count: item.count,
+    })
+  ) || [];
 
-  const stats = [
-    {
-      title: 'Total Customers',
-      value: '2,543',
-      change: '+12.5%',
-      isPositive: true,
-      icon: '👥',
-    },
-    {
-      title: 'Active Users',
-      value: '1,892',
-      change: '+8.2%',
-      isPositive: true,
-      icon: '✓',
-    },
-    {
-      title: 'Total Revenue',
-      value: '$98,234',
-      change: '+23.1%',
-      isPositive: true,
-      icon: '💰',
-    },
-    {
-      title: 'Churn Rate',
-      value: '3.4%',
-      change: '-1.2%',
-      isPositive: true,
-      icon: '📊',
-    },
-  ];
+  const userDistributionData = reportData
+    ? [
+        {
+          name: "Premium",
+          value: reportData.user_statistics.user_distribution.premium,
+        },
+        {
+          name: "Regular",
+          value: reportData.user_statistics.user_distribution.regular,
+        },
+        {
+          name: "Admin",
+          value: reportData.user_statistics.user_distribution.admin,
+        },
+      ]
+    : [];
+
+  const COLORS = ["#3B82F6", "#8B5CF6", "#10B981"];
+
+  const stats = reportData
+    ? [
+        {
+          title: "Total Users",
+          value: reportData.user_statistics.total_users.toLocaleString(),
+          change: `+${reportData.user_statistics.user_growth_percent.toFixed(
+            2
+          )}%`,
+          isPositive: true,
+          icon: "👥",
+        },
+        {
+          title: "Active Users",
+          value: reportData.engagement_metrics.active_users.toLocaleString(),
+          change: "",
+          isPositive: true,
+          icon: "✓",
+        },
+        {
+          title: "Monthly Revenue",
+          value: `${reportData.revenue.currency} ${reportData.revenue.estimated_monthly_revenue.toLocaleString()}`,
+          change: `+${reportData.revenue.revenue_growth_percent.toFixed(2)}%`,
+          isPositive: true,
+          icon: "💰",
+        },
+        {
+          title: "Conversion Rate",
+          value: `${reportData.conversion_metrics.conversion_rate.toFixed(2)}%`,
+          change: "",
+          isPositive: true,
+          icon: "📊",
+        },
+      ]
+    : [];
 
   const handleExport = (format: string) => {
     alert(`Exporting report as ${format}...`);
@@ -143,31 +287,50 @@ export default function Reports() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {stats.map((stat, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-3xl">{stat.icon}</span>
-                  <span
-                    className={`text-sm font-medium px-2 py-1 rounded ${
-                      stat.isPositive
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {stat.change}
-                  </span>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse"
+                >
+                  <div className="h-8 bg-gray-200 rounded mb-4"></div>
+                  <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-10 bg-gray-200 rounded"></div>
                 </div>
-                <h3 className="text-gray-600 text-sm font-medium mb-1">
-                  {stat.title}
-                </h3>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {stats.map((stat, index) => (
+                <div
+                  key={index}
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-3xl">{stat.icon}</span>
+                    {stat.change && (
+                      <span
+                        className={`text-sm font-medium px-2 py-1 rounded ${
+                          stat.isPositive
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {stat.change}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-gray-600 text-sm font-medium mb-1">
+                    {stat.title}
+                  </h3>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Filters and Export */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
@@ -186,15 +349,14 @@ export default function Reports() {
                 </select>
 
                 <select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
+                  value={period}
+                  onChange={(e) => setPeriod(parseInt(e.target.value))}
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
                 >
-                  <option value="7days">Last 7 Days</option>
-                  <option value="30days">Last 30 Days</option>
-                  <option value="90days">Last 90 Days</option>
-                  <option value="1year">Last Year</option>
-                  <option value="custom">Custom Range</option>
+                  <option value={7}>Last 7 Days</option>
+                  <option value={30}>Last 30 Days</option>
+                  <option value={90}>Last 90 Days</option>
+                  <option value={365}>Last Year</option>
                 </select>
               </div>
 
@@ -224,194 +386,245 @@ export default function Reports() {
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Revenue Chart */}
+            {/* Daily Growth Chart */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Revenue Growth
+                Daily User Growth
+              </h3>
+              {isLoading ? (
+                <div className="h-[300px] flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={dailyGrowthData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" stroke="#6B7280" />
+                    <YAxis stroke="#6B7280" />
+                    <Tooltip />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="count"
+                      stroke="#3B82F6"
+                      strokeWidth={2}
+                      name="New Users"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* User Distribution */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                User Distribution
+              </h3>
+              {isLoading ? (
+                <div className="h-[300px] flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={userDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) =>
+                        `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                      }
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {userDistributionData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Monthly Growth Chart */}
+          {reportData && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Monthly User Growth
               </h3>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={revenueData}>
+                <BarChart data={monthlyGrowthData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="month" stroke="#6B7280" />
                   <YAxis stroke="#6B7280" />
                   <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#3B82F6"
-                    strokeWidth={2}
-                    name="Revenue ($)"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Subscription Distribution */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Subscription Distribution
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={subscriptionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="plan" stroke="#6B7280" />
-                  <YAxis stroke="#6B7280" />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#3B82F6" name="Customers" />
+                  <Bar dataKey="count" fill="#3B82F6" name="New Users" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          )}
 
-          {/* Customer Table */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Customer Details
+          {/* Additional Statistics */}
+          {reportData && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  User Statistics
                 </h3>
-                <div className="relative">
-                  <Input
-                    type="text"
-                    placeholder="Search customers..."
-                    className="pl-10"
-                  />
-                  <svg
-                    className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Premium Users</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.user_statistics.premium_users.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Regular Users</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.user_statistics.regular_users.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Admin Users</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.user_statistics.admin_users.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      New Users (Period)
+                    </span>
+                    <span className="text-sm font-semibold text-green-600">
+                      +
+                      {reportData.user_statistics.current_period_new_users.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Revenue Statistics
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      Monthly Revenue
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.revenue.currency}{" "}
+                      {reportData.revenue.estimated_monthly_revenue.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      Annual Revenue
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.revenue.currency}{" "}
+                      {reportData.revenue.estimated_annual_revenue.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      Premium Subscribers
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.revenue.premium_subscribers.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Engagement Metrics
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Total Playlists</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.engagement_metrics.total_playlists.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      Avg Playlists/User
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.engagement_metrics.avg_playlists_per_user.toFixed(
+                        2
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">
+                      Avg Songs/Playlist
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.engagement_metrics.avg_songs_per_playlist.toFixed(
+                        2
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Retention Rate</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {reportData.engagement_metrics.retention_rate.toFixed(2)}%
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
+          )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Customer
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Plan
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Join Date
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Last Active
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Total Spent
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {customers.map((customer) => (
-                    <tr key={customer.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium">
-                            {customer.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {customer.name}
-                            </p>
-                            <p className="text-xs text-gray-500">{customer.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded ${
-                            customer.plan === 'Premium'
-                              ? 'bg-purple-100 text-purple-700'
-                              : customer.plan === 'Basic'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {customer.plan}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-700">
-                        {customer.joinDate}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-600">
-                        {customer.lastActive}
-                      </td>
-                      <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                        {customer.totalSpent}
-                      </td>
-                      <td className="py-4 px-6">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded ${
-                            customer.status === 'active'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {customer.status === 'active' ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                            View
-                          </button>
-                          <button className="text-gray-600 hover:text-gray-700 text-sm">
-                            Edit
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Showing <span className="font-medium">1</span> to{' '}
-                <span className="font-medium">5</span> of{' '}
-                <span className="font-medium">2,543</span> customers
-              </p>
-              <div className="flex items-center space-x-2">
-                <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">
-                  Previous
-                </button>
-                <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm">
-                  1
-                </button>
-                <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">
-                  2
-                </button>
-                <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">
-                  3
-                </button>
-                <button className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-sm">
-                  Next
-                </button>
+          {/* Period Information */}
+          {reportData && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Report Period
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Period</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {reportData.period.days} days
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Start Date</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {new Date(reportData.period.start_date).toLocaleDateString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">End Date</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {new Date(reportData.period.end_date).toLocaleDateString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Previous Period</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {new Date(
+                      reportData.period.previous_start
+                    ).toLocaleDateString()}{" "}
+                    -{" "}
+                    {new Date(
+                      reportData.period.previous_end
+                    ).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </Layout>
     </>

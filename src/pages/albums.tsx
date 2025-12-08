@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import Head from 'next/head';
-import Layout from '@/components/Layout';
-import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast';
+import { useState, useEffect } from "react";
+import Head from "next/head";
+import Layout from "@/components/Layout";
+import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/Pagination";
+import { useToast } from "@/components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -10,129 +11,265 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
+import axios from "axios";
+import { CONFIG } from "@/config";
+import toast from "react-hot-toast";
 
 interface Album {
   id: number;
   title: string;
+  artist_id: number;
   artist: string;
+  release_date: string;
+  album_type: string;
   genre: string;
-  type: string;
-  releaseYear: string;
-  trackCount: number;
-  duration: string;
-  description: string;
-  coverImage?: string;
+  total_tracks: number;
+  record_label: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 export default function Albums() {
   const { success, error, warning } = useToast();
-  
-  const [albums, setAlbums] = useState<Album[]>([
-    {
-      id: 1,
-      title: 'Beach Season',
-      artist: 'The Waves',
-      genre: 'Pop',
-      type: 'Album',
-      releaseYear: '2023',
-      trackCount: 12,
-      duration: '45:30',
-      description: 'A summer collection of beach-inspired melodies',
-    },
-    {
-      id: 2,
-      title: 'Night Tales',
-      artist: 'Luna Echo',
-      genre: 'Electronic',
-      type: 'Album',
-      releaseYear: '2024',
-      trackCount: 10,
-      duration: '42:15',
-      description: 'Electronic soundscapes for midnight listening',
-    },
-    {
-      id: 3,
-      title: 'Calm Collection',
-      artist: 'Nature Sounds',
-      genre: 'Ambient',
-      type: 'Compilation',
-      releaseYear: '2023',
-      trackCount: 15,
-      duration: '52:20',
-      description: 'Peaceful ambient tracks for relaxation',
-    },
-    {
-      id: 4,
-      title: 'Street Life',
-      artist: 'Urban Beats',
-      genre: 'Hip Hop',
-      type: 'Album',
-      releaseYear: '2024',
-      trackCount: 14,
-      duration: '48:45',
-      description: 'Urban stories told through beats and rhymes',
-    },
-    {
-      id: 5,
-      title: 'Timeless Classics',
-      artist: 'Classical Masters',
-      genre: 'Classical',
-      type: 'Album',
-      releaseYear: '2023',
-      trackCount: 20,
-      duration: '78:30',
-      description: 'A collection of classical masterpieces',
-    },
-  ]);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterArtist, setFilterArtist] = useState('all');
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterArtist, setFilterArtist] = useState("all");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [formData, setFormData] = useState({
-    title: '',
-    artist: '',
-    genre: '',
-    type: '',
-    releaseYear: '',
-    trackCount: '',
-    duration: '',
-    description: '',
+    title: "",
+    artist: "",
+    artist_id: "",
+    genre: "",
+    album_type: "",
+    release_date: "",
+    total_tracks: "",
+    record_label: "",
   });
+  const [artists, setArtists] = useState<Array<{ id: number; name: string }>>(
+    []
+  );
+  const [genres, setGenres] = useState<Array<{ id: number; name: string }>>([]);
+  const [isLoadingArtists, setIsLoadingArtists] = useState(false);
+  const [isLoadingGenres, setIsLoadingGenres] = useState(false);
 
-  // Get unique artists for filter
-  const uniqueArtists = ['all', ...new Set(albums.map((album) => album.artist))];
-  const genres = ['Pop', 'Rock', 'Jazz', 'Electronic', 'Hip Hop', 'Classical', 'Ambient', 'R&B'];
-  
-  // Available artists for selection
-  const availableArtists = [
-    'The Waves',
-    'Luna Echo',
-    'Nature Sounds',
-    'Urban Beats',
-    'Classical Masters',
-    'Thunder Strike',
-    'Summer Vibes',
-    'Ocean Dreams',
-    'Jazz Collective',
-  ];
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
+    }
+    return null;
+  };
+
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
+  };
 
   // Album types
-  const albumTypes = ['Single', 'EP', 'Album', 'Compilation', 'Live Album', 'Remix Album'];
+  const albumTypes = [
+    "single",
+    "EP",
+    "album",
+    "compilation",
+    "live_album",
+    "remix_album",
+  ];
+
+  // Fetch albums from API
+  const fetchAlbums = async (pageParam = 1, query?: string) => {
+    try {
+      setIsLoading(true);
+      const url = `${CONFIG.API_URL}/api/albums?search=${query || ""}`;
+
+      const params: Record<string, string | number> = {
+        page: pageParam,
+        limit: pageSize,
+      };
+
+      if (filterArtist !== "all") {
+        params.artist_id = filterArtist;
+      }
+
+      const response = await axios.get(url, {
+        params,
+        ...getAuthHeaders(),
+      });
+
+      if (!response.data?.success) {
+        const errorMsg =
+          response.data?.message || "Unable to fetch albums from server.";
+        error("Failed to Load Albums", errorMsg);
+        return;
+      }
+
+      const items = response.data.data as Array<{
+        id: number;
+        title: string;
+        artist_id: number;
+        artist: string;
+        release_date: string;
+        album_type: string;
+        genre: string;
+        total_tracks: number;
+        record_label: string | null;
+        created_at?: string;
+        updated_at?: string;
+        deleted_at?: string | null;
+      }>;
+
+      const mapped: Album[] = items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        artist_id: item.artist_id,
+        artist: item.artist,
+        release_date: item.release_date
+          ? item.release_date.split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        album_type: item.album_type,
+        genre: item.genre,
+        total_tracks: item.total_tracks,
+        record_label: item.record_label,
+        created_at: item.created_at
+          ? item.created_at.split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        updated_at: item.updated_at
+          ? item.updated_at.split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        deleted_at: item.deleted_at || null,
+      }));
+
+      setAlbums(mapped);
+
+      // ambil info pagination dari backend
+      const pagination = response.data.pagination || {};
+      const apiPage =
+        typeof pagination.page === "number" ? pagination.page : pageParam;
+      const apiLimit =
+        typeof pagination.limit === "number" ? pagination.limit : pageSize;
+      const apiTotal =
+        typeof pagination.total === "number" ? pagination.total : mapped.length;
+      const apiTotalPages =
+        typeof pagination.pages === "number"
+          ? pagination.pages
+          : Math.max(1, Math.ceil(apiTotal / apiLimit));
+
+      setPage(apiPage);
+      setTotal(apiTotal);
+      setTotalPages(apiTotalPages);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "Terjadi kesalahan saat mengambil data album.";
+      error("Failed to Load Albums", msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch artists from API
+  const fetchArtists = async () => {
+    try {
+      setIsLoadingArtists(true);
+      const response = await axios.get(`${CONFIG.API_URL}/api/artists`, {
+        params: {
+          page: 1,
+          limit: 100, // Get all artists
+        },
+        ...getAuthHeaders(),
+      });
+
+      if (response.data?.success && response.data?.data) {
+        const artistsList = response.data.data.map(
+          (artist: { id: number; name: string }) => ({
+            id: artist.id,
+            name: artist.name,
+          })
+        );
+        setArtists(artistsList);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch artists:", err);
+      setArtists([]);
+    } finally {
+      setIsLoadingArtists(false);
+    }
+  };
+
+  // Fetch genres from API
+  const fetchGenres = async () => {
+    try {
+      setIsLoadingGenres(true);
+      const response = await axios.get(`${CONFIG.API_URL}/api/genres`, {
+        params: {
+          page: 1,
+          limit: 100, // Get all genres
+        },
+        ...getAuthHeaders(),
+      });
+
+      if (response.data?.success && response.data?.data) {
+        const genresList = response.data.data.map(
+          (genre: { id: number; name: string }) => ({
+            id: genre.id,
+            name: genre.name,
+          })
+        );
+        setGenres(genresList);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch genres:", err);
+      setGenres([]);
+    } finally {
+      setIsLoadingGenres(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAlbums(1);
+    fetchArtists();
+    fetchGenres();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // debounce search agar tidak terlalu banyak request
+    const timeout = setTimeout(() => {
+      const query = searchQuery.trim() || undefined;
+      fetchAlbums(1, query);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, filterArtist]);
 
   const handleAddClick = () => {
     setFormData({
-      title: '',
-      artist: '',
-      genre: '',
-      type: '',
-      releaseYear: '',
-      trackCount: '',
-      duration: '',
-      description: '',
+      title: "",
+      artist: "",
+      artist_id: "",
+      genre: "",
+      album_type: "",
+      release_date: "",
+      total_tracks: "",
+      record_label: "",
     });
     setIsAddModalOpen(true);
   };
@@ -142,12 +279,12 @@ export default function Albums() {
     setFormData({
       title: album.title,
       artist: album.artist,
+      artist_id: album.artist_id.toString(),
       genre: album.genre,
-      type: album.type,
-      releaseYear: album.releaseYear,
-      trackCount: album.trackCount.toString(),
-      duration: album.duration,
-      description: album.description,
+      album_type: album.album_type,
+      release_date: album.release_date,
+      total_tracks: album.total_tracks.toString(),
+      record_label: album.record_label || "",
     });
     setIsEditModalOpen(true);
   };
@@ -157,104 +294,196 @@ export default function Albums() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newAlbum: Album = {
-        id: albums.length + 1,
+      const token = getAuthToken();
+
+      const payload: Record<string, any> = {
         title: formData.title,
-        artist: formData.artist,
+        artist:
+          artists.find((artist) => artist.id === parseInt(formData.artist_id))
+            ?.name || "",
+        artist_id: parseInt(formData.artist_id),
         genre: formData.genre,
-        type: formData.type,
-        releaseYear: formData.releaseYear,
-        trackCount: parseInt(formData.trackCount),
-        duration: formData.duration,
-        description: formData.description,
+        album_type: formData.album_type,
+        release_date: formData.release_date,
+        total_tracks: parseInt(formData.total_tracks),
       };
-      setAlbums([...albums, newAlbum]);
+
+      if (formData.record_label) {
+        payload.record_label = formData.record_label;
+      }
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/albums`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (!response.data?.success) {
+        const errorMsg =
+          response.data?.message || "An error occurred while adding the album.";
+        error("Failed to Add Album", errorMsg);
+        toast.error(errorMsg);
+        return;
+      }
+
+      await fetchAlbums(1, searchQuery.trim() ? searchQuery : undefined);
       setIsAddModalOpen(false);
       setFormData({
-        title: '',
-        artist: '',
-        genre: '',
-        type: '',
-        releaseYear: '',
-        trackCount: '',
-        duration: '',
-        description: '',
+        title: "",
+        artist: "",
+        artist_id: "",
+        genre: "",
+        album_type: "",
+        release_date: "",
+        total_tracks: "",
+        record_label: "",
       });
-      success('Album Added Successfully', `${formData.title} by ${formData.artist} has been added.`);
-    } catch (err) {
-      error('Failed to Add Album', 'An error occurred while adding the album. Please try again.');
+      success("Album Added Successfully", `${formData.title} has been added.`);
+      toast.success("Album berhasil ditambahkan!");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "An error occurred while adding the album. Please try again.";
+      error("Failed to Add Album", msg);
+      toast.error(msg);
     }
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedAlbum) {
-      try {
-        setAlbums(
-          albums.map((album) =>
-            album.id === selectedAlbum.id
-              ? {
-                  ...album,
-                  title: formData.title,
-                  artist: formData.artist,
-                  genre: formData.genre,
-                  type: formData.type,
-                  releaseYear: formData.releaseYear,
-                  trackCount: parseInt(formData.trackCount),
-                  duration: formData.duration,
-                  description: formData.description,
-                }
-              : album
-          )
-        );
-        setIsEditModalOpen(false);
-        setSelectedAlbum(null);
-        setFormData({
-          title: '',
-          artist: '',
-          genre: '',
-          type: '',
-          releaseYear: '',
-          trackCount: '',
-          duration: '',
-          description: '',
-        });
-        success('Album Updated Successfully', `${formData.title} has been updated.`);
-      } catch (err) {
-        error('Failed to Update Album', 'An error occurred while updating the album. Please try again.');
+    if (!selectedAlbum) return;
+
+    try {
+      const token = getAuthToken();
+
+      const payload: Record<string, any> = {
+        title: formData.title,
+        artist:
+          artists.find((artist) => artist.id === parseInt(formData.artist_id))
+            ?.name || "",
+        artist_id: parseInt(formData.artist_id),
+        genre: formData.genre,
+        album_type: formData.album_type,
+        release_date: formData.release_date,
+        total_tracks: parseInt(formData.total_tracks),
+      };
+
+      if (formData.record_label) {
+        payload.record_label = formData.record_label;
       }
+
+      const response = await axios.put(
+        `${CONFIG.API_URL}/api/albums/${selectedAlbum.id}`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (!response.data?.success) {
+        const errorMsg =
+          response.data?.message ||
+          "An error occurred while updating the album.";
+        error("Failed to Update Album", errorMsg);
+        toast.error(errorMsg);
+        return;
+      }
+
+      await fetchAlbums(page, searchQuery.trim() ? searchQuery : undefined);
+      setIsEditModalOpen(false);
+      setSelectedAlbum(null);
+      setFormData({
+        title: "",
+        artist: "",
+        artist_id: "",
+        genre: "",
+        album_type: "",
+        release_date: "",
+        total_tracks: "",
+        record_label: "",
+      });
+      success(
+        "Album Updated Successfully",
+        `${formData.title} has been updated.`
+      );
+      toast.success("Album berhasil diperbarui!");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "An error occurred while updating the album. Please try again.";
+      error("Failed to Update Album", msg);
+      toast.error(msg);
     }
   };
 
-  const handleDeleteConfirm = () => {
-    if (selectedAlbum) {
-      try {
-        const albumTitle = selectedAlbum.title;
-        setAlbums(albums.filter((album) => album.id !== selectedAlbum.id));
-        setIsDeleteModalOpen(false);
-        setSelectedAlbum(null);
-        warning('Album Deleted', `${albumTitle} has been removed from your album list.`);
-      } catch (err) {
-        error('Failed to Delete Album', 'An error occurred while deleting the album. Please try again.');
+  const handleDeleteConfirm = async () => {
+    if (!selectedAlbum) return;
+
+    try {
+      const token = getAuthToken();
+      const albumTitle = selectedAlbum.title;
+
+      const response = await axios.delete(
+        `${CONFIG.API_URL}/api/albums/${selectedAlbum.id}`,
+        {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.data?.success) {
+        const errorMsg =
+          response.data?.message ||
+          "An error occurred while deleting the album.";
+        error("Failed to Delete Album", errorMsg);
+        toast.error(errorMsg);
+        return;
       }
+
+      await fetchAlbums(page, searchQuery.trim() ? searchQuery : undefined);
+      setIsDeleteModalOpen(false);
+      setSelectedAlbum(null);
+      warning("Album Deleted", `${albumTitle} has been removed.`);
+      toast.success("Album berhasil dihapus!");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "An error occurred while deleting the album. Please try again.";
+      error("Failed to Delete Album", msg);
+      toast.error(msg);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const filteredAlbums = albums.filter((album) => {
-    const matchesSearch =
-      album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      album.artist.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesArtist = filterArtist === 'all' || album.artist === filterArtist;
-    return matchesSearch && matchesArtist;
-  });
+  // Get unique artists for filter
+  const uniqueArtists = [
+    "all",
+    ...new Set(albums.map((album) => album.artist)),
+  ];
 
   return (
     <>
@@ -267,49 +496,12 @@ export default function Albums() {
         <div className="p-6">
           {/* Page Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Album Management</h1>
-            <p className="text-gray-600">Kelola semua album dari berbagai artist</p>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">💿</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{albums.length}</p>
-              <p className="text-sm text-gray-600">Total Albums</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎤</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {new Set(albums.map((a) => a.artist)).size}
-              </p>
-              <p className="text-sm text-gray-600">Artists</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎵</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {albums.reduce((acc, album) => acc + album.trackCount, 0)}
-              </p>
-              <p className="text-sm text-gray-600">Total Tracks</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📅</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {new Date().getFullYear()}
-              </p>
-              <p className="text-sm text-gray-600">Current Year</p>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Album Management
+            </h1>
+            <p className="text-gray-600">
+              Kelola semua album dari berbagai artist
+            </p>
           </div>
 
           {/* Filters and Actions */}
@@ -366,94 +558,123 @@ export default function Albums() {
 
           {/* Albums Table */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Album
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Artist
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Genre
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Year
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Tracks
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Duration
-                    </th>
-                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredAlbums.map((album) => (
-                    <tr key={album.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center shrink-0">
-                            <span className="text-xl">💿</span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{album.title}</p>
-                            <p className="text-xs text-gray-500">{album.description}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900">{album.artist}</td>
-                      <td className="py-4 px-6">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                          {album.genre}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded">
-                          {album.type}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900">{album.releaseYear}</td>
-                      <td className="py-4 px-6 text-sm text-gray-900 font-medium">
-                        {album.trackCount}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-600">{album.duration}</td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <button
-                            onClick={() => handleEditClick(album)}
-                            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(album)}
-                            className="text-red-600 hover:text-red-700 text-sm font-medium"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Empty State */}
-            {filteredAlbums.length === 0 && (
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600">Memuat data album...</p>
+              </div>
+            ) : albums.length === 0 ? (
               <div className="text-center py-12">
                 <span className="text-6xl mb-4 block">💿</span>
-                <p className="text-gray-600">No albums found</p>
+                <p className="text-gray-600">Tidak ada album ditemukan</p>
               </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Album
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Artist
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Genre
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Type
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Release Date
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Tracks
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Record Label
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {albums.map((album) => (
+                        <tr
+                          key={album.id}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center shrink-0">
+                                <span className="text-xl">💿</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {album.title}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-900">
+                            {album.artist}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                              {album.genre}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                              {album.album_type}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-900">
+                            {album.release_date}
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-900 font-medium">
+                            {album.total_tracks}
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-600">
+                            {album.record_label || "-"}
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center space-x-3">
+                              <button
+                                onClick={() => handleEditClick(album)}
+                                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(album)}
+                                className="text-red-600 hover:text-red-700 text-sm font-medium"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {total > 0 && (
+                  <Pagination
+                    total={total}
+                    page={page}
+                    pageSize={pageSize}
+                    onPageChange={(nextPage) => {
+                      const query = searchQuery.trim() || undefined;
+                      fetchAlbums(nextPage, query);
+                    }}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
@@ -465,12 +686,17 @@ export default function Albums() {
           <form onSubmit={handleAddSubmit}>
             <DialogHeader>
               <DialogTitle>Add New Album</DialogTitle>
-              <DialogDescription>Tambahkan album baru ke platform Anda</DialogDescription>
+              <DialogDescription>
+                Tambahkan album baru ke platform Anda
+              </DialogDescription>
             </DialogHeader>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
               <div>
-                <label htmlFor="add-title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-title"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Album Title <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -485,28 +711,37 @@ export default function Albums() {
               </div>
 
               <div>
-                <label htmlFor="add-artist" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-artist"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Artist <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="add-artist"
-                  name="artist"
+                  name="artist_id"
                   required
-                  value={formData.artist}
+                  value={formData.artist_id}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                  disabled={isLoadingArtists}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select artist</option>
-                  {availableArtists.map((artist) => (
-                    <option key={artist} value={artist}>
-                      {artist}
+                  <option value="">
+                    {isLoadingArtists ? "Loading artists..." : "Select artist"}
+                  </option>
+                  {artists.map((artist) => (
+                    <option key={artist.id} value={artist.id}>
+                      {artist.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="add-genre" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-genre"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Genre <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -515,96 +750,95 @@ export default function Albums() {
                   required
                   value={formData.genre}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                  disabled={isLoadingGenres}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select genre</option>
+                  <option value="">
+                    {isLoadingGenres ? "Loading genres..." : "Select genre"}
+                  </option>
                   {genres.map((genre) => (
-                    <option key={genre} value={genre}>
-                      {genre}
+                    <option key={genre.id} value={genre.name}>
+                      {genre.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="add-type" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-type"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Album Type <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="add-type"
-                  name="type"
+                  name="album_type"
                   required
-                  value={formData.type}
+                  value={formData.album_type}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
                 >
                   <option value="">Select type</option>
                   {albumTypes.map((type) => (
                     <option key={type} value={type}>
-                      {type}
+                      {type.charAt(0).toUpperCase() +
+                        type.slice(1).replace("_", " ")}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="add-year" className="block text-sm font-medium text-gray-700 mb-2">
-                  Release Year <span className="text-red-500">*</span>
+                <label
+                  htmlFor="add-release-date"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Release Date <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  id="add-year"
-                  name="releaseYear"
-                  type="text"
+                  id="add-release-date"
+                  name="release_date"
+                  type="date"
                   required
-                  value={formData.releaseYear}
+                  value={formData.release_date}
                   onChange={handleChange}
-                  placeholder="e.g. 2024"
                 />
               </div>
 
               <div>
-                <label htmlFor="add-tracks" className="block text-sm font-medium text-gray-700 mb-2">
-                  Track Count <span className="text-red-500">*</span>
+                <label
+                  htmlFor="add-tracks"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Total Tracks <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="add-tracks"
-                  name="trackCount"
+                  name="total_tracks"
                   type="number"
                   required
-                  value={formData.trackCount}
+                  value={formData.total_tracks}
                   onChange={handleChange}
                   placeholder="e.g. 12"
+                  min="1"
                 />
               </div>
 
               <div>
-                <label htmlFor="add-duration" className="block text-sm font-medium text-gray-700 mb-2">
-                  Duration <span className="text-red-500">*</span>
+                <label
+                  htmlFor="add-record-label"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Record Label
                 </label>
                 <Input
-                  id="add-duration"
-                  name="duration"
+                  id="add-record-label"
+                  name="record_label"
                   type="text"
-                  required
-                  value={formData.duration}
+                  value={formData.record_label}
                   onChange={handleChange}
-                  placeholder="e.g. 45:30"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label htmlFor="add-description" className="block text-sm font-medium text-gray-700 mb-2">
-                  Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  id="add-description"
-                  name="description"
-                  required
-                  value={formData.description}
-                  onChange={handleChange}
-                  rows={3}
-                  placeholder="Enter album description..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 placeholder-gray-400"
+                  placeholder="e.g. Universal Music"
                 />
               </div>
             </div>
@@ -639,7 +873,10 @@ export default function Albums() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
               <div>
-                <label htmlFor="edit-title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-title"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Album Title <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -654,28 +891,37 @@ export default function Albums() {
               </div>
 
               <div>
-                <label htmlFor="edit-artist" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-artist"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Artist <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="edit-artist"
-                  name="artist"
+                  name="artist_id"
                   required
-                  value={formData.artist}
+                  value={formData.artist_id}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                  disabled={isLoadingArtists}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select artist</option>
-                  {availableArtists.map((artist) => (
-                    <option key={artist} value={artist}>
-                      {artist}
+                  <option value="">
+                    {isLoadingArtists ? "Loading artists..." : "Select artist"}
+                  </option>
+                  {artists.map((artist) => (
+                    <option key={artist.id} value={artist.id}>
+                      {artist.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="edit-genre" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-genre"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Genre <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -684,96 +930,95 @@ export default function Albums() {
                   required
                   value={formData.genre}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                  disabled={isLoadingGenres}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select genre</option>
+                  <option value="">
+                    {isLoadingGenres ? "Loading genres..." : "Select genre"}
+                  </option>
                   {genres.map((genre) => (
-                    <option key={genre} value={genre}>
-                      {genre}
+                    <option key={genre.id} value={genre.name}>
+                      {genre.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="edit-type" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-type"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Album Type <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="edit-type"
-                  name="type"
+                  name="album_type"
                   required
-                  value={formData.type}
+                  value={formData.album_type}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
                 >
                   <option value="">Select type</option>
                   {albumTypes.map((type) => (
                     <option key={type} value={type}>
-                      {type}
+                      {type.charAt(0).toUpperCase() +
+                        type.slice(1).replace("_", " ")}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="edit-year" className="block text-sm font-medium text-gray-700 mb-2">
-                  Release Year <span className="text-red-500">*</span>
+                <label
+                  htmlFor="edit-release-date"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Release Date <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  id="edit-year"
-                  name="releaseYear"
-                  type="text"
+                  id="edit-release-date"
+                  name="release_date"
+                  type="date"
                   required
-                  value={formData.releaseYear}
+                  value={formData.release_date}
                   onChange={handleChange}
-                  placeholder="e.g. 2024"
                 />
               </div>
 
               <div>
-                <label htmlFor="edit-tracks" className="block text-sm font-medium text-gray-700 mb-2">
-                  Track Count <span className="text-red-500">*</span>
+                <label
+                  htmlFor="edit-tracks"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Total Tracks <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="edit-tracks"
-                  name="trackCount"
+                  name="total_tracks"
                   type="number"
                   required
-                  value={formData.trackCount}
+                  value={formData.total_tracks}
                   onChange={handleChange}
                   placeholder="e.g. 12"
+                  min="1"
                 />
               </div>
 
               <div>
-                <label htmlFor="edit-duration" className="block text-sm font-medium text-gray-700 mb-2">
-                  Duration <span className="text-red-500">*</span>
+                <label
+                  htmlFor="edit-record-label"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Record Label
                 </label>
                 <Input
-                  id="edit-duration"
-                  name="duration"
+                  id="edit-record-label"
+                  name="record_label"
                   type="text"
-                  required
-                  value={formData.duration}
+                  value={formData.record_label}
                   onChange={handleChange}
-                  placeholder="e.g. 45:30"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 mb-2">
-                  Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  id="edit-description"
-                  name="description"
-                  required
-                  value={formData.description}
-                  onChange={handleChange}
-                  rows={3}
-                  placeholder="Enter album description..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 placeholder-gray-400"
+                  placeholder="e.g. Universal Music"
                 />
               </div>
             </div>
@@ -824,7 +1069,8 @@ export default function Albums() {
                 <div>
                   <p className="text-sm font-medium text-red-900">Warning</p>
                   <p className="text-sm text-red-700 mt-1">
-                    This action cannot be undone. All tracks in this album will be affected.
+                    This action cannot be undone. All tracks in this album will
+                    be affected.
                   </p>
                 </div>
               </div>
@@ -833,13 +1079,22 @@ export default function Albums() {
             {selectedAlbum && (
               <div className="mt-4">
                 <p className="text-sm text-gray-600">
-                  Album: <span className="font-medium text-gray-900">{selectedAlbum.title}</span>
+                  Album:{" "}
+                  <span className="font-medium text-gray-900">
+                    {selectedAlbum.title}
+                  </span>
                 </p>
                 <p className="text-sm text-gray-600">
-                  Artist: <span className="font-medium text-gray-900">{selectedAlbum.artist}</span>
+                  Artist:{" "}
+                  <span className="font-medium text-gray-900">
+                    {selectedAlbum.artist}
+                  </span>
                 </p>
                 <p className="text-sm text-gray-600">
-                  Tracks: <span className="font-medium text-gray-900">{selectedAlbum.trackCount}</span>
+                  Tracks:{" "}
+                  <span className="font-medium text-gray-900">
+                    {selectedAlbum.total_tracks}
+                  </span>
                 </p>
               </div>
             )}
@@ -866,4 +1121,3 @@ export default function Albums() {
     </>
   );
 }
-

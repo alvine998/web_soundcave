@@ -244,46 +244,6 @@ export default function Subscriptions() {
             <p className="text-gray-600">Kelola semua paket langganan di platform Anda</p>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">💳</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{subscriptions.length}</p>
-              <p className="text-sm text-gray-600">Total Plans</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">⭐</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {subscriptions.filter((s) => s.isPopular).length}
-              </p>
-              <p className="text-sm text-gray-600">Popular Plans</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎵</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {subscriptions.filter((s) => !s.adsEnabled).length}
-              </p>
-              <p className="text-sm text-gray-600">Ad-Free Plans</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">💰</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {subscriptions.filter((s) => s.price !== 'Rp 0').length}
-              </p>
-              <p className="text-sm text-gray-600">Paid Plans</p>
-            </div>
-          </div>
 
           {/* Search and Actions */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">

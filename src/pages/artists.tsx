@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import Layout from '@/components/Layout';
-import { Input } from '@/components/ui/input';
-import { Pagination } from '@/components/Pagination';
-import { useToast } from '@/components/ui/toast';
-import axios from 'axios';
-import { CONFIG } from '@/config';
+import { useState, useEffect } from "react";
+import Head from "next/head";
+import { useRouter } from "next/router";
+import Layout from "@/components/Layout";
+import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/Pagination";
+import { useToast } from "@/components/ui/toast";
+import axios from "axios";
+import { CONFIG } from "@/config";
 
 interface Artist {
   id: number;
@@ -14,7 +14,7 @@ interface Artist {
   bio: string;
   genre: string;
   country: string;
-  debutYear?: string;
+  debut_year?: string;
   website?: string;
   email?: string;
   phone?: string;
@@ -24,7 +24,7 @@ interface Artist {
     facebook?: string;
     youtube?: string;
   };
-  profileImage?: string;
+  profile_image?: string;
   createdAt: string;
   // Computed fields untuk UI
   followers?: number;
@@ -38,34 +38,46 @@ export default function Artists() {
   const router = useRouter();
   const { error } = useToast();
   const [artists, setArtists] = useState<Artist[]>([]);
-  const [filterGenre, setFilterGenre] = useState('all');
-  const [sortBy, setSortBy] = useState('created_at');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filterGenre, setFilterGenre] = useState("all");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  const fetchArtists = async (pageParam = 1) => {
-    const hasSearch = searchQuery.trim();
-    const url = hasSearch
-      ? `${CONFIG.API_URL}/api/artists/search`
-      : `${CONFIG.API_URL}/api/artists`;
-
-    const params: Record<string, string> = {
-      page: String(pageParam),
-      limit: String(pageSize),
-    };
-
-    if (hasSearch) {
-      params.q = searchQuery.trim();
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
     }
+    return null;
+  };
+
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
+  };
+
+  const fetchArtists = async (pageParam = 1) => {
+    const url = `${CONFIG.API_URL}/api/artists?search=${searchQuery || ""}`;
+
+    const params: Record<string, string | number> = {
+      page: pageParam,
+      limit: pageSize,
+    };
 
     // Hanya kirim filter dan sort jika tidak ada search query
     // (atau sesuaikan dengan kebutuhan backend)
-    if (!hasSearch) {
-      if (filterGenre !== 'all') {
+    if (!searchQuery.trim()) {
+      if (filterGenre !== "all") {
         params.genre = filterGenre;
       }
 
@@ -77,12 +89,16 @@ export default function Artists() {
     try {
       setIsLoading(true);
 
-      const response = await axios.get(url, { params });
+      const response = await axios.get(url, {
+        params,
+        ...getAuthHeaders(),
+      });
 
       if (!response.data?.success) {
-        const errorMsg = response.data?.message || 'Unable to fetch artists from server.';
-        error('Failed to Load Artists', errorMsg);
-        console.error('API Error:', {
+        const errorMsg =
+          response.data?.message || "Unable to fetch artists from server.";
+        error("Failed to Load Artists", errorMsg);
+        console.error("API Error:", {
           url,
           params,
           response: response.data,
@@ -96,17 +112,17 @@ export default function Artists() {
         bio: string;
         genre: string;
         country: string;
-        debutYear?: string;
+        debut_year?: string;
         website?: string;
         email?: string;
         phone?: string;
-        socialMedia?: {
+        social_media?: {
           instagram?: string;
           twitter?: string;
           facebook?: string;
           youtube?: string;
         };
-        profileImage?: string;
+        profile_image?: string;
         created_at?: string;
         updated_at?: string;
       }>;
@@ -117,15 +133,15 @@ export default function Artists() {
         bio: item.bio,
         genre: item.genre,
         country: item.country,
-        debutYear: item.debutYear,
+        debut_year: item.debut_year,
         website: item.website,
         email: item.email,
         phone: item.phone,
-        socialMedia: item.socialMedia,
-        profileImage: CONFIG.API_URL+item.profileImage,
+        social_media: item.social_media,
+        profile_image: item.profile_image,
         createdAt: item.created_at
-          ? item.created_at.split('T')[0]
-          : new Date().toISOString().split('T')[0],
+          ? item.created_at.split("T")[0]
+          : new Date().toISOString().split("T")[0],
         // Default values untuk UI (bisa diambil dari API nanti jika ada)
         followers: 0,
         songs: 0,
@@ -136,24 +152,24 @@ export default function Artists() {
 
       setArtists(mapped);
 
+      // ambil info pagination dari backend (struktur baru dengan object pagination)
+      const pagination = response.data.pagination || {};
       const apiPage =
-        typeof response.data.page === 'number' ? response.data.page : pageParam;
+        typeof pagination.page === "number" ? pagination.page : pageParam;
       const apiLimit =
-        typeof response.data.limit === 'number' ? response.data.limit : pageSize;
+        typeof pagination.limit === "number" ? pagination.limit : pageSize;
       const apiTotal =
-        typeof response.data.total === 'number'
-          ? response.data.total
-          : mapped.length;
+        typeof pagination.total === "number" ? pagination.total : mapped.length;
       const apiTotalPages =
-        typeof response.data.totalPages === 'number'
-          ? response.data.totalPages
+        typeof pagination.pages === "number"
+          ? pagination.pages
           : Math.max(1, Math.ceil(apiTotal / apiLimit));
 
       setPage(apiPage);
       setTotal(apiTotal);
       setTotalPages(apiTotalPages);
     } catch (err: any) {
-      console.error('Fetch Artists Error:', {
+      console.error("Fetch Artists Error:", {
         url,
         params,
         error: err,
@@ -164,8 +180,8 @@ export default function Artists() {
         err?.response?.data?.message ||
         err?.response?.data?.error?.message ||
         err?.message ||
-        'Terjadi kesalahan saat mengambil data artist.';
-      error('Failed to Load Artists', msg);
+        "Terjadi kesalahan saat mengambil data artist.";
+      error("Failed to Load Artists", msg);
     } finally {
       setIsLoading(false);
     }
@@ -186,13 +202,26 @@ export default function Artists() {
   }, [searchQuery, filterGenre, sortBy]);
 
   const stats = [
-    { title: 'Total Artists', value: total.toLocaleString(), icon: '🎤', change: '+23' },
-    { title: 'Verified Artists', value: '567', icon: '✓', change: '+12' },
-    { title: 'Total Followers', value: '2.4M', icon: '❤️', change: '+45K' },
-    { title: 'New This Month', value: '34', icon: '✨', change: '+8' },
+    {
+      title: "Total Artists",
+      value: total.toLocaleString(),
+      icon: "🎤",
+      change: "+23",
+    },
+    { title: "Verified Artists", value: "567", icon: "✓", change: "+12" },
+    { title: "Total Followers", value: "2.4M", icon: "❤️", change: "+45K" },
+    { title: "New This Month", value: "34", icon: "✨", change: "+8" },
   ];
 
-  const genres = ['All', 'Pop', 'Rock', 'Electronic', 'Hip Hop', 'Classical', 'Ambient'];
+  const genres = [
+    "All",
+    "Pop",
+    "Rock",
+    "Electronic",
+    "Hip Hop",
+    "Classical",
+    "Ambient",
+  ];
 
   return (
     <>
@@ -209,8 +238,8 @@ export default function Artists() {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Artists</h1>
               <p className="text-gray-600">Jelajahi dan kelola semua artist</p>
             </div>
-            <button 
-              onClick={() => router.push('/artists/create')}
+            <button
+              onClick={() => router.push("/artists/create")}
               className="mt-4 sm:mt-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               + Add Artist
@@ -271,147 +300,151 @@ export default function Artists() {
             </div>
           </div>
 
-          {/* Artists Grid */}
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Memuat data artist...</p>
-            </div>
-          ) : artists.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 text-center py-12">
-              <span className="text-6xl mb-4 block">🎤</span>
-              <p className="text-gray-600">Tidak ada artist ditemukan</p>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                {artists.map((artist) => (
-                  <div
-                    key={artist.id}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-                  >
-                    {/* Artist Cover */}
-                    <div className="h-48 bg-linear-to-br from-blue-400 to-purple-600 flex items-center justify-center relative overflow-hidden">
-                      {artist.profileImage ? (
-                        <img
-                          src={artist.profileImage}
-                          alt={artist.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <span className="text-7xl">🎤</span>
-                      )}
-                      {artist.verified && (
-                        <div className="absolute top-4 right-4 bg-blue-600 text-white rounded-full p-2 z-10">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                              fillRule="evenodd"
-                              d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Artist Info */}
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center">
-                            {artist.name}
-                          </h3>
-                          <p className="text-sm text-gray-600">{artist.country}</p>
-                          {artist.debutYear && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              Debut: {artist.debutYear}
-                            </p>
-                          )}
-                        </div>
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                          {artist.genre}
-                        </span>
-                      </div>
-
-                      {artist.bio && (
-                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                          {artist.bio}
-                        </p>
-                      )}
-
-                      {/* Stats */}
-                      <div className="grid grid-cols-3 gap-4 py-4 border-t border-b border-gray-100 mb-4">
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-gray-900">
-                            {artist.songs || 0}
-                          </p>
-                          <p className="text-xs text-gray-600">Songs</p>
-                        </div>
-                        <div className="text-center border-l border-r border-gray-100">
-                          <p className="text-lg font-bold text-gray-900">
-                            {artist.albums || 0}
-                          </p>
-                          <p className="text-xs text-gray-600">Albums</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-gray-900">
-                            {artist.followers
-                              ? (artist.followers / 1000).toFixed(0) + 'K'
-                              : '0'}
-                          </p>
-                          <p className="text-xs text-gray-600">Followers</p>
-                        </div>
-                      </div>
-
-                      {/* Monthly Listeners */}
-                      {artist.monthlyListeners && artist.followers && (
-                        <div className="mb-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-gray-600">Monthly Listeners</span>
-                            <span className="text-sm font-semibold text-gray-900">
-                              {(artist.monthlyListeners / 1000).toFixed(0)}K
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full transition-all"
-                              style={{
-                                width: `${Math.min(
-                                  (artist.monthlyListeners / artist.followers) * 100,
-                                  100
-                                )}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => router.push(`/artists/${artist.id}`)}
-                          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                        >
-                          View Profile
-                        </button>
-                        <button
-                          onClick={() => router.push(`/artists/edit/${artist.id}`)}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          {/* Artists Table */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600">Memuat data artist...</p>
               </div>
+            ) : artists.length === 0 ? (
+              <div className="text-center py-12">
+                <span className="text-6xl mb-4 block">🎤</span>
+                <p className="text-gray-600">Tidak ada artist ditemukan</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Artist
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Genre
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Country
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Debut Year
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Songs
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Albums
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Followers
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {artists.map((artist) => (
+                        <tr
+                          key={artist.id}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center space-x-3">
+                              <div className="shrink-0 h-10 w-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                                {artist.profile_image ? (
+                                  <img
+                                    src={artist.profile_image}
+                                    alt={artist.name}
+                                    className="h-full w-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-xl">🎤</span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {artist.name}
+                                  </p>
+                                  {artist.verified && (
+                                    <svg
+                                      className="w-4 h-4 text-blue-600 shrink-0"
+                                      fill="currentColor"
+                                      viewBox="0 0 20 20"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                        clipRule="evenodd"
+                                      />
+                                    </svg>
+                                  )}
+                                </div>
+                                {artist.bio && (
+                                  <p className="text-xs text-gray-500 truncate mt-1">
+                                    {artist.bio}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                              {artist.genre}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-700">
+                            {artist.country}
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-600">
+                            {artist.debut_year || "-"}
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-900 font-medium">
+                            {artist.songs?.toLocaleString() || 0}
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-900 font-medium">
+                            {artist.albums?.toLocaleString() || 0}
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-900 font-medium">
+                            {artist.followers
+                              ? artist.followers >= 1000
+                                ? (artist.followers / 1000).toFixed(1) + "K"
+                                : artist.followers.toLocaleString()
+                              : "0"}
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center space-x-3">
+                              <button
+                                onClick={() =>
+                                  router.push(`/artists/${artist.id}`)
+                                }
+                                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() =>
+                                  router.push(`/artists/edit/${artist.id}`)
+                                }
+                                className="text-gray-600 hover:text-gray-700 text-sm font-medium"
+                              >
+                                Edit
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Pagination */}
-              {total > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {/* Pagination */}
+                {total > 0 && (
                   <Pagination
                     total={total}
                     page={page}
@@ -421,13 +454,12 @@ export default function Artists() {
                       fetchArtists(nextPage);
                     }}
                   />
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
+          </div>
         </div>
       </Layout>
     </>
   );
 }
-

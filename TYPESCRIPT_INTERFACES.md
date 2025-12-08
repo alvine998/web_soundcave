@@ -16,12 +16,22 @@ interface LoginRequest {
 
 interface LoginResponse {
   success: boolean;
-  token: string;
-  user: {
-    id: number;
-    name: string;
-    email: string;
-    role: string;
+  message: string;
+  data: {
+    token: string;
+    user: {
+      id: number;
+      full_name: string;
+      email: string;
+      phone: string;
+      location: string;
+      bio: string;
+      profile_image: string | null;
+      role: string;
+      created_at: string;
+      updated_at: string;
+      deleted_at: string | null;
+    };
   };
 }
 ```

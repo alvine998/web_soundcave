@@ -1,6 +1,6 @@
-import { ReactNode, useState } from 'react';
-import { useRouter } from 'next/router';
-import { Input } from '@/components/ui/input';
+import { ReactNode, useState } from "react";
+import { useRouter } from "next/router";
+import { Input } from "@/components/ui/input";
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,7 +12,7 @@ interface Notification {
   message: string;
   time: string;
   isRead: boolean;
-  type: 'info' | 'success' | 'warning' | 'error';
+  type: "info" | "success" | "warning" | "error";
 }
 
 export default function Layout({ children }: LayoutProps) {
@@ -25,51 +25,51 @@ export default function Layout({ children }: LayoutProps) {
   const [notifications] = useState<Notification[]>([
     {
       id: 1,
-      title: 'New Artist Registered',
-      message: 'John Doe just created an artist account',
-      time: '2 min ago',
+      title: "New Artist Registered",
+      message: "John Doe just created an artist account",
+      time: "2 min ago",
       isRead: false,
-      type: 'info',
+      type: "info",
     },
     {
       id: 2,
-      title: 'Album Uploaded',
+      title: "Album Uploaded",
       message: 'Premium album "Summer Vibes" has been uploaded',
-      time: '15 min ago',
+      time: "15 min ago",
       isRead: false,
-      type: 'success',
+      type: "success",
     },
     {
       id: 3,
-      title: 'Payment Received',
-      message: 'User subscription payment of Rp 150.000 received',
-      time: '1 hour ago',
+      title: "Payment Received",
+      message: "User subscription payment of Rp 150.000 received",
+      time: "1 hour ago",
       isRead: true,
-      type: 'success',
+      type: "success",
     },
     {
       id: 4,
-      title: 'Report Generated',
-      message: 'Monthly analytics report is ready to view',
-      time: '2 hours ago',
+      title: "Report Generated",
+      message: "Monthly analytics report is ready to view",
+      time: "2 hours ago",
       isRead: true,
-      type: 'info',
+      type: "info",
     },
     {
       id: 5,
-      title: 'System Update',
-      message: 'Platform maintenance scheduled for tonight',
-      time: '3 hours ago',
+      title: "System Update",
+      message: "Platform maintenance scheduled for tonight",
+      time: "3 hours ago",
       isRead: true,
-      type: 'warning',
+      type: "warning",
     },
     {
       id: 6,
-      title: 'New Playlist Created',
+      title: "New Playlist Created",
       message: 'User created "Chill Vibes" playlist',
-      time: '5 hours ago',
+      time: "5 hours ago",
       isRead: true,
-      type: 'info',
+      type: "info",
     },
   ]);
 
@@ -77,22 +77,23 @@ export default function Layout({ children }: LayoutProps) {
   const recentNotifications = notifications.slice(0, 5);
 
   const menuItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: '📊' },
-    { name: 'Analytics', path: '/analytics', icon: '📈' },
-    { name: 'Genres', path: '/genres', icon: '🎼' },
-    { name: 'Artists', path: '/artists', icon: '🎤' },
-    { name: 'Albums', path: '/albums', icon: '💿' },
-    { name: 'Music', path: '/music', icon: '🎵' },
-    { name: 'Music Videos', path: '/music-videos', icon: '🎬' },
-    { name: 'Podcasts', path: '/podcasts', icon: '🎙️' },
-    { name: 'Playlists', path: '/playlists', icon: '🎧' },
-    { name: 'Subscriptions', path: '/subscriptions', icon: '💳' },
-    { name: 'Reports', path: '/reports', icon: '📄' },
-    { name: 'About Apps', path: '/about-apps', icon: 'ℹ️' },
+    { name: "Dashboard", path: "/dashboard", icon: "📊" },
+    // { name: 'Analytics', path: '/analytics', icon: '📈' },
+    { name: "Genres", path: "/genres", icon: "🎼" },
+    { name: "Artists", path: "/artists", icon: "🎤" },
+    { name: "Albums", path: "/albums", icon: "💿" },
+    { name: "Music", path: "/music", icon: "🎵" },
+    { name: "Music Videos", path: "/music-videos", icon: "🎬" },
+    { name: "Podcasts", path: "/podcasts", icon: "🎙️" },
+    { name: "Playlists", path: "/playlists", icon: "🎧" },
+    // { name: 'Subscriptions', path: '/subscriptions', icon: '💳' },
+    { name: "News", path: "/news", icon: "📰" },
+    { name: "Customer Reports", path: "/reports", icon: "📄" },
+    { name: "About Apps", path: "/about-apps", icon: "ℹ️" },
   ];
 
   const handleLogout = () => {
-    router.push('/');
+    router.push("/");
   };
 
   return (
@@ -100,21 +101,21 @@ export default function Layout({ children }: LayoutProps) {
       {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${
-          isSidebarOpen ? 'w-64' : 'w-20'
+          isSidebarOpen ? "w-64" : "w-20"
         }`}
       >
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
           {isSidebarOpen ? (
-            <img 
-              src="/images/soundcave_logo.png" 
-              alt="SoundCave" 
+            <img
+              src="/images/soundcave_logo.png"
+              alt="SoundCave"
               className="h-12 w-auto"
             />
           ) : (
-            <img 
-              src="/images/short_logo.png" 
-              alt="SoundCave" 
+            <img
+              src="/images/short_logo.png"
+              alt="SoundCave"
               className="h-12 w-12 object-contain"
             />
           )}
@@ -128,8 +129,8 @@ export default function Layout({ children }: LayoutProps) {
               onClick={() => router.push(item.path)}
               className={`w-full flex items-center px-6 py-3 text-left transition-colors ${
                 router.pathname === item.path
-                  ? 'bg-blue-50 text-blue-600 border-r-4 border-blue-600'
-                  : 'text-gray-700 hover:bg-gray-50'
+                  ? "bg-blue-50 text-blue-600 border-r-4 border-blue-600"
+                  : "text-gray-700 hover:bg-gray-50"
               }`}
             >
               <span className="text-xl">{item.icon}</span>
@@ -144,13 +145,14 @@ export default function Layout({ children }: LayoutProps) {
       {/* Main Content */}
       <div
         className={`transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-20'
+          isSidebarOpen ? "ml-64" : "ml-20"
         }`}
       >
         {/* Topbar */}
-        <header className="h-16 bg-white border-b border-gray-200 fixed top-0 right-0 z-20"
+        <header
+          className="h-16 bg-white border-b border-gray-200 fixed top-0 right-0 z-20"
           style={{
-            width: isSidebarOpen ? 'calc(100% - 16rem)' : 'calc(100% - 5rem)',
+            width: isSidebarOpen ? "calc(100% - 16rem)" : "calc(100% - 5rem)",
           }}
         >
           <div className="h-full px-6 flex items-center justify-between">
@@ -213,16 +215,24 @@ export default function Layout({ children }: LayoutProps) {
                     {/* Header */}
                     <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          Notifications
+                        </h3>
                         {unreadCount > 0 && (
-                          <p className="text-xs text-gray-500">{unreadCount} unread</p>
+                          <p className="text-xs text-gray-500">
+                            {unreadCount} unread
+                          </p>
                         )}
                       </div>
                       <button
                         onClick={() => setNotificationMenuOpen(false)}
                         className="text-gray-400 hover:text-gray-600"
                       >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <svg
+                          className="w-5 h-5"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
                           <path
                             fillRule="evenodd"
                             d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
@@ -238,40 +248,52 @@ export default function Layout({ children }: LayoutProps) {
                         <div
                           key={notification.id}
                           className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors ${
-                            !notification.isRead ? 'bg-blue-50' : ''
+                            !notification.isRead ? "bg-blue-50" : ""
                           }`}
                         >
                           <div className="flex items-start space-x-3">
                             {/* Icon */}
                             <div
                               className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                                notification.type === 'success'
-                                  ? 'bg-green-100 text-green-600'
-                                  : notification.type === 'warning'
-                                  ? 'bg-yellow-100 text-yellow-600'
-                                  : notification.type === 'error'
-                                  ? 'bg-red-100 text-red-600'
-                                  : 'bg-blue-100 text-blue-600'
+                                notification.type === "success"
+                                  ? "bg-green-100 text-green-600"
+                                  : notification.type === "warning"
+                                  ? "bg-yellow-100 text-yellow-600"
+                                  : notification.type === "error"
+                                  ? "bg-red-100 text-red-600"
+                                  : "bg-blue-100 text-blue-600"
                               }`}
                             >
-                              {notification.type === 'success' ? (
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              {notification.type === "success" ? (
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
                                   <path
                                     fillRule="evenodd"
                                     d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
                                     clipRule="evenodd"
                                   />
                                 </svg>
-                              ) : notification.type === 'warning' ? (
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              ) : notification.type === "warning" ? (
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
                                   <path
                                     fillRule="evenodd"
                                     d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
                                     clipRule="evenodd"
                                   />
                                 </svg>
-                              ) : notification.type === 'error' ? (
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              ) : notification.type === "error" ? (
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
                                   <path
                                     fillRule="evenodd"
                                     d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -279,7 +301,11 @@ export default function Layout({ children }: LayoutProps) {
                                   />
                                 </svg>
                               ) : (
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
                                   <path
                                     fillRule="evenodd"
                                     d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
@@ -302,7 +328,9 @@ export default function Layout({ children }: LayoutProps) {
                               <p className="text-xs text-gray-600 mb-1">
                                 {notification.message}
                               </p>
-                              <p className="text-xs text-gray-400">{notification.time}</p>
+                              <p className="text-xs text-gray-400">
+                                {notification.time}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -314,7 +342,7 @@ export default function Layout({ children }: LayoutProps) {
                       <button
                         onClick={() => {
                           setNotificationMenuOpen(false);
-                          router.push('/notifications');
+                          router.push("/notifications");
                         }}
                         className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
                       >
@@ -334,7 +362,9 @@ export default function Layout({ children }: LayoutProps) {
                   <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium">
                     A
                   </div>
-                  <span className="text-sm font-medium text-gray-700">Admin</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    Admin
+                  </span>
                   <svg
                     className="w-4 h-4 text-gray-600"
                     fill="none"
@@ -354,7 +384,7 @@ export default function Layout({ children }: LayoutProps) {
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2">
                     <button
-                      onClick={() => router.push('/profile')}
+                      onClick={() => router.push("/profile")}
                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       Profile
@@ -374,11 +404,8 @@ export default function Layout({ children }: LayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="pt-16 min-h-screen">
-          {children}
-        </main>
+        <main className="pt-16 min-h-screen">{children}</main>
       </div>
     </div>
   );
 }
-

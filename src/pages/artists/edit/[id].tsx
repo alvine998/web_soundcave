@@ -32,7 +32,66 @@ export default function EditArtist() {
   });
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [currentProfileImage, setCurrentProfileImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [genres, setGenres] = useState<Array<{ id: number; name: string }>>([]);
+  const [isLoadingGenres, setIsLoadingGenres] = useState(false);
+
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
+    }
+    return null;
+  };
+
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
+  };
+
+  // Fetch genres from API
+  const fetchGenres = async () => {
+    try {
+      setIsLoadingGenres(true);
+      const response = await axios.get(
+        `${CONFIG.API_URL}/api/genres`,
+        {
+          params: {
+            page: 1,
+            limit: 100, // Get all genres
+          },
+          ...getAuthHeaders(),
+        }
+      );
+
+      if (response.data?.success && response.data?.data) {
+        const genresList = response.data.data.map((genre: { id: number; name: string }) => ({
+          id: genre.id,
+          name: genre.name,
+        }));
+        setGenres(genresList);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch genres:', err);
+      setGenres([]);
+    } finally {
+      setIsLoadingGenres(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGenres();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load existing artist data
   useEffect(() => {
@@ -41,7 +100,16 @@ export default function EditArtist() {
 
       try {
         setIsLoadingData(true);
-        const response = await axios.get(`${CONFIG.API_URL}/api/artists/${id}`);
+        const token = getAuthToken();
+        const response = await axios.get(
+          `${CONFIG.API_URL}/api/artists/${id}`,
+          {
+            headers: {
+              Authorization: token ? `Bearer ${token}` : "",
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
         if (response.data?.success && response.data?.data) {
           const artist = response.data.data;
@@ -53,16 +121,21 @@ export default function EditArtist() {
             phone: artist.phone || '',
             website: artist.website || '',
             bio: artist.bio || '',
-            debutYear: artist.debutYear || '',
+            debutYear: artist.debut_year || artist.debutYear || '',
             socialMedia: {
-              instagram: artist.socialMedia?.instagram || '',
-              twitter: artist.socialMedia?.twitter || '',
-              facebook: artist.socialMedia?.facebook || '',
-              youtube: artist.socialMedia?.youtube || '',
+              instagram: artist.social_media?.instagram || artist.socialMedia?.instagram || '',
+              twitter: artist.social_media?.twitter || artist.socialMedia?.twitter || '',
+              facebook: artist.social_media?.facebook || artist.socialMedia?.facebook || '',
+              youtube: artist.social_media?.youtube || artist.socialMedia?.youtube || '',
             },
           });
-          if (artist.profileImage) {
-            setCurrentProfileImage(`${CONFIG.API_URL}${artist.profileImage}`);
+          const profileImageUrl = artist.profile_image || artist.profileImage;
+          if (profileImageUrl) {
+            // If it's already a full URL, use it; otherwise prepend API URL
+            const fullUrl = profileImageUrl.startsWith('http') 
+              ? profileImageUrl 
+              : `${CONFIG.API_URL}${profileImageUrl}`;
+            setCurrentProfileImage(fullUrl);
           }
         }
       } catch (err: any) {
@@ -101,9 +174,61 @@ export default function EditArtist() {
     }
   };
 
-  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setProfileImage(e.target.files[0]);
+      const file = e.target.files[0];
+      setProfileImage(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload image immediately
+      await uploadImage(file);
+    }
+  };
+
+  const uploadImage = async (file: File) => {
+    try {
+      setIsUploadingImage(true);
+      const token = getAuthToken();
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'artists/profile');
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/images/upload`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        const imageUrl = response.data.data.file_url;
+        setProfileImageUrl(imageUrl);
+        toast.success(response.data?.message || 'Image uploaded successfully');
+      } else {
+        throw new Error(response.data?.message || 'Failed to upload image');
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'Failed to upload image. Please try again.';
+      error('Failed to Upload Image', msg);
+      toast.error(msg);
+      setProfileImage(null);
+      setProfileImagePreview(null);
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
@@ -114,20 +239,22 @@ export default function EditArtist() {
     setIsLoading(true);
 
     try {
-      // Buat FormData untuk multipart/form-data
-      const formDataToSend = new FormData();
+      const token = getAuthToken();
+
+      // Prepare payload (JSON, not FormData)
+      const payload: Record<string, any> = {};
 
       // Fields (semua optional untuk update)
-      if (formData.name) formDataToSend.append('name', formData.name);
-      if (formData.bio) formDataToSend.append('bio', formData.bio);
-      if (formData.genre) formDataToSend.append('genre', formData.genre);
-      if (formData.country) formDataToSend.append('country', formData.country);
-      if (formData.debutYear) formDataToSend.append('debutYear', formData.debutYear);
-      if (formData.email) formDataToSend.append('email', formData.email);
-      if (formData.phone) formDataToSend.append('phone', formData.phone);
-      if (formData.website) formDataToSend.append('website', formData.website);
+      if (formData.name) payload.name = formData.name;
+      if (formData.bio) payload.bio = formData.bio;
+      if (formData.genre) payload.genre = formData.genre;
+      if (formData.country) payload.country = formData.country;
+      if (formData.debutYear) payload.debut_year = formData.debutYear;
+      if (formData.email) payload.email = formData.email;
+      if (formData.phone) payload.phone = formData.phone;
+      if (formData.website) payload.website = formData.website;
 
-      // Social Media sebagai JSON string
+      // Social Media
       const socialMediaObj: Record<string, string> = {};
       if (formData.socialMedia.instagram) {
         socialMediaObj.instagram = formData.socialMedia.instagram;
@@ -143,20 +270,24 @@ export default function EditArtist() {
       }
 
       if (Object.keys(socialMediaObj).length > 0) {
-        formDataToSend.append('socialMedia', JSON.stringify(socialMediaObj));
+        payload.social_media = socialMediaObj;
       }
 
-      // Profile Image (binary) - hanya kirim jika ada file baru
-      if (profileImage) {
-        formDataToSend.append('profileImage', profileImage);
+      // Profile Image URL (from upload) - hanya kirim jika ada image baru yang diupload
+      if (profileImageUrl) {
+        payload.profile_image = profileImageUrl;
       }
+
+      // Debug: Log payload to verify structure
+      console.log('Payload being sent:', JSON.stringify(payload, null, 2));
 
       const response = await axios.put(
         `${CONFIG.API_URL}/api/artists/${id}`,
-        formDataToSend,
+        payload,
         {
           headers: {
-            'Content-Type': 'multipart/form-data',
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : "",
           },
         }
       );
@@ -188,7 +319,6 @@ export default function EditArtist() {
     }
   };
 
-  const genres = ['Pop', 'Rock', 'Jazz', 'Electronic', 'Hip Hop', 'Classical', 'Ambient', 'R&B', 'Country'];
 
   return (
     <>
@@ -264,13 +394,27 @@ export default function EditArtist() {
                           onChange={handleProfileImageChange}
                           className="hidden"
                           id="profile-upload"
+                          disabled={isUploadingImage}
                         />
-                        <label htmlFor="profile-upload" className="cursor-pointer">
-                          <div className="text-4xl mb-2">👤</div>
-                          {profileImage ? (
-                            <p className="text-sm text-gray-900 font-medium">{profileImage.name}</p>
+                        <label htmlFor="profile-upload" className={`cursor-pointer ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                          {profileImagePreview ? (
+                            <div className="space-y-2">
+                              <img
+                                src={profileImagePreview}
+                                alt="Preview"
+                                className="mx-auto h-32 w-32 object-cover rounded-lg"
+                              />
+                              <p className="text-sm text-gray-900 font-medium">{profileImage?.name}</p>
+                              {isUploadingImage && (
+                                <p className="text-xs text-blue-600">Uploading...</p>
+                              )}
+                              {profileImageUrl && !isUploadingImage && (
+                                <p className="text-xs text-green-600">✓ Uploaded successfully</p>
+                              )}
+                            </div>
                           ) : (
                             <>
+                              <div className="text-4xl mb-2">👤</div>
                               <p className="text-sm text-gray-600">Click to replace profile photo</p>
                               <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
                             </>
@@ -312,12 +456,15 @@ export default function EditArtist() {
                       required
                       value={formData.genre}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                      disabled={isLoadingGenres}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <option value="">Select genre</option>
+                      <option value="">
+                        {isLoadingGenres ? 'Loading genres...' : 'Select genre'}
+                      </option>
                       {genres.map((genre) => (
-                        <option key={genre} value={genre}>
-                          {genre}
+                        <option key={genre.id} value={genre.name}>
+                          {genre.name}
                         </option>
                       ))}
                     </select>

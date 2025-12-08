@@ -1,25 +1,165 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
+import axios from 'axios';
+import { CONFIG } from '@/config';
+import toast from 'react-hot-toast';
 
 export default function CreateMusic() {
   const router = useRouter();
+  const { success, error } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    artist: '',
-    album: '',
+    artist_id: '',
+    album_id: '',
     genre: '',
     duration: '',
-    releaseDate: '',
+    release_date: '',
+    language: '',
+    explicit: false,
     description: '',
     lyrics: '',
+    tags: '',
   });
 
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioFileUrl, setAudioFileUrl] = useState<string | null>(null);
   const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+  const [artists, setArtists] = useState<Array<{ id: number; name: string }>>([]);
+  const [albums, setAlbums] = useState<Array<{ id: number; title: string; artist: string }>>([]);
+  const [genres, setGenres] = useState<Array<{ id: number; name: string }>>([]);
+  const [isLoadingArtists, setIsLoadingArtists] = useState(false);
+  const [isLoadingGenres, setIsLoadingGenres] = useState(false);
+
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
+    }
+    return null;
+  };
+
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
+  };
+
+  // Fetch artists from API
+  const fetchArtists = async () => {
+    try {
+      setIsLoadingArtists(true);
+      const response = await axios.get(
+        `${CONFIG.API_URL}/api/artists`,
+        {
+          params: {
+            page: 1,
+            limit: 100, // Get all artists
+          },
+          ...getAuthHeaders(),
+        }
+      );
+
+      if (response.data?.success && response.data?.data) {
+        const artistsList = response.data.data.map((artist: { id: number; name: string }) => ({
+          id: artist.id,
+          name: artist.name,
+        }));
+        setArtists(artistsList);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch artists:', err);
+      setArtists([]);
+    } finally {
+      setIsLoadingArtists(false);
+    }
+  };
+
+  // Fetch albums from API
+  const fetchAlbums = async () => {
+    try {
+      const response = await axios.get(
+        `${CONFIG.API_URL}/api/albums`,
+        {
+          params: {
+            page: 1,
+            limit: 100, // Get all albums
+          },
+          ...getAuthHeaders(),
+        }
+      );
+
+      if (response.data?.success && response.data?.data) {
+        const albumsList = response.data.data.map((album: { id: number; title: string; artist: string }) => ({
+          id: album.id,
+          title: album.title,
+          artist: album.artist,
+        }));
+        setAlbums(albumsList);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch albums:', err);
+      setAlbums([]);
+    }
+  };
+
+  // Fetch genres from API
+  const fetchGenres = async () => {
+    try {
+      setIsLoadingGenres(true);
+      const response = await axios.get(
+        `${CONFIG.API_URL}/api/genres`,
+        {
+          params: {
+            page: 1,
+            limit: 100, // Get all genres
+          },
+          ...getAuthHeaders(),
+        }
+      );
+
+      if (response.data?.success && response.data?.data) {
+        const genresList = response.data.data.map((genre: { id: number; name: string }) => ({
+          id: genre.id,
+          name: genre.name,
+        }));
+        setGenres(genresList);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch genres:', err);
+      setGenres([]);
+    } finally {
+      setIsLoadingGenres(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchArtists();
+    fetchAlbums();
+    fetchGenres();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update albums when artist changes
+  useEffect(() => {
+    if (formData.artist_id) {
+      fetchAlbums();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.artist_id]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -29,15 +169,110 @@ export default function CreateMusic() {
     }));
   };
 
-  const handleAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAudioChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setAudioFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setAudioFile(file);
+      // Upload audio file immediately
+      await uploadAudioFile(file);
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setCoverImage(e.target.files[0]);
+      const file = e.target.files[0];
+      setCoverImage(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload image immediately
+      await uploadImage(file);
+    }
+  };
+
+  const uploadAudioFile = async (file: File) => {
+    try {
+      setIsUploadingAudio(true);
+      const token = getAuthToken();
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'musics');
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/musics/upload`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        const audioUrl = response.data.data.file_url;
+        setAudioFileUrl(audioUrl);
+        toast.success(response.data?.message || 'Audio file uploaded successfully');
+      } else {
+        throw new Error(response.data?.message || 'Failed to upload audio file');
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'Failed to upload audio file. Please try again.';
+      error('Failed to Upload Audio', msg);
+      toast.error(msg);
+      setAudioFile(null);
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  };
+
+  const uploadImage = async (file: File) => {
+    try {
+      setIsUploadingImage(true);
+      const token = getAuthToken();
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'musics/covers');
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/images/upload`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        const imageUrl = response.data.data.file_url;
+        setCoverImageUrl(imageUrl);
+        toast.success(response.data?.message || 'Image uploaded successfully');
+      } else {
+        throw new Error(response.data?.message || 'Failed to upload image');
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'Failed to upload image. Please try again.';
+      error('Failed to Upload Image', msg);
+      toast.error(msg);
+      setCoverImage(null);
+      setCoverImagePreview(null);
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
@@ -45,30 +280,93 @@ export default function CreateMusic() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulasi upload - ganti dengan API call yang sebenarnya
-    setTimeout(() => {
-      console.log('Form Data:', formData);
-      console.log('Audio File:', audioFile);
-      console.log('Cover Image:', coverImage);
-      setIsLoading(false);
+    try {
+      const token = getAuthToken();
+
+      // Validate required files
+      if (!audioFileUrl) {
+        error('Audio File Required', 'Please upload an audio file first.');
+        toast.error('Please upload an audio file first.');
+        setIsLoading(false);
+        return;
+      }
+
+      const payload: Record<string, any> = {
+        title: formData.title,
+        artist:
+          artists.find((artist) => artist.id === parseInt(formData.artist_id))
+            ?.name || "",
+        artist_id: parseInt(formData.artist_id),
+        genre: formData.genre,
+        audio_file_url: audioFileUrl,
+        duration: formData.duration,
+        explicit: formData.explicit || false,
+      };
+
+      // Optional fields
+      if (formData.album_id) {
+        payload.album_id = parseInt(formData.album_id);
+        payload.album =
+          albums.find((album) => album.id === parseInt(formData.album_id))
+            ?.title || "";
+      }
+      if (formData.release_date) {
+        payload.release_date = formData.release_date;
+      }
+      if (formData.language) {
+        payload.language = formData.language;
+      }
+      if (formData.description) {
+        payload.description = formData.description;
+      }
+      if (formData.lyrics) {
+        payload.lyrics = formData.lyrics;
+      }
+      if (formData.tags) {
+        payload.tags = formData.tags;
+      }
+      if (coverImageUrl) {
+        payload.cover_image_url = coverImageUrl;
+      }
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/musics`,
+        payload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (!response.data?.success) {
+        const errorMsg =
+          response.data?.message ||
+          'An error occurred while uploading the music.';
+        error('Failed to Upload Music', errorMsg);
+        toast.error(errorMsg);
+        return;
+      }
+
+      success(
+        'Music Uploaded Successfully',
+        `${formData.title} has been uploaded.`
+      );
+      toast.success('Music berhasil diupload!');
       router.push('/music');
-    }, 2000);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'An error occurred while uploading the music. Please try again.';
+      error('Failed to Upload Music', msg);
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const genres = ['Pop', 'Rock', 'Jazz', 'Electronic', 'Hip Hop', 'Classical', 'Ambient', 'R&B', 'Country'];
-  
-  // Available artists for selection
-  const availableArtists = [
-    'The Waves',
-    'Luna Echo',
-    'Nature Sounds',
-    'Urban Beats',
-    'Classical Masters',
-    'Thunder Strike',
-    'Summer Vibes',
-    'Ocean Dreams',
-    'Jazz Collective',
-  ];
 
   return (
     <>
@@ -118,15 +416,24 @@ export default function CreateMusic() {
                         className="hidden"
                         id="audio-upload"
                         required
+                        disabled={isUploadingAudio}
                       />
-                      <label htmlFor="audio-upload" className="cursor-pointer">
+                      <label htmlFor="audio-upload" className={`cursor-pointer ${isUploadingAudio ? 'opacity-50 cursor-not-allowed' : ''}`}>
                         <div className="text-4xl mb-2">🎵</div>
                         {audioFile ? (
-                          <p className="text-sm text-gray-900 font-medium">{audioFile.name}</p>
+                          <div className="space-y-2">
+                            <p className="text-sm text-gray-900 font-medium">{audioFile.name}</p>
+                            {isUploadingAudio && (
+                              <p className="text-xs text-blue-600">Uploading...</p>
+                            )}
+                            {audioFileUrl && !isUploadingAudio && (
+                              <p className="text-xs text-green-600">✓ Uploaded successfully</p>
+                            )}
+                          </div>
                         ) : (
                           <>
                             <p className="text-sm text-gray-600">Click to upload audio file</p>
-                            <p className="text-xs text-gray-500 mt-1">MP3, WAV, FLAC up to 50MB</p>
+                            <p className="text-xs text-gray-500 mt-1">MP3, WAV, OGG, M4A, AAC, FLAC up to 50MB</p>
                           </>
                         )}
                       </label>
@@ -145,14 +452,27 @@ export default function CreateMusic() {
                         onChange={handleImageChange}
                         className="hidden"
                         id="image-upload"
-                        required
+                        disabled={isUploadingImage}
                       />
-                      <label htmlFor="image-upload" className="cursor-pointer">
-                        <div className="text-4xl mb-2">🖼️</div>
-                        {coverImage ? (
-                          <p className="text-sm text-gray-900 font-medium">{coverImage.name}</p>
+                      <label htmlFor="image-upload" className={`cursor-pointer ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        {coverImagePreview ? (
+                          <div className="space-y-2">
+                            <img
+                              src={coverImagePreview}
+                              alt="Preview"
+                              className="mx-auto h-32 w-32 object-cover rounded-lg"
+                            />
+                            <p className="text-sm text-gray-900 font-medium">{coverImage?.name}</p>
+                            {isUploadingImage && (
+                              <p className="text-xs text-blue-600">Uploading...</p>
+                            )}
+                            {coverImageUrl && !isUploadingImage && (
+                              <p className="text-xs text-green-600">✓ Uploaded successfully</p>
+                            )}
+                          </div>
                         ) : (
                           <>
+                            <div className="text-4xl mb-2">🖼️</div>
                             <p className="text-sm text-gray-600">Click to upload cover image</p>
                             <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
                           </>
@@ -191,16 +511,19 @@ export default function CreateMusic() {
                     </label>
                     <select
                       id="artist"
-                      name="artist"
+                      name="artist_id"
                       required
-                      value={formData.artist}
+                      value={formData.artist_id}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                      disabled={isLoadingArtists}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <option value="">Select artist</option>
-                      {availableArtists.map((artist) => (
-                        <option key={artist} value={artist}>
-                          {artist}
+                      <option value="">
+                        {isLoadingArtists ? 'Loading artists...' : 'Select artist'}
+                      </option>
+                      {artists.map((artist) => (
+                        <option key={artist.id} value={artist.id}>
+                          {artist.name}
                         </option>
                       ))}
                     </select>
@@ -211,14 +534,22 @@ export default function CreateMusic() {
                     <label htmlFor="album" className="block text-sm font-medium text-gray-700 mb-2">
                       Album
                     </label>
-                    <Input
+                    <select
                       id="album"
-                      name="album"
-                      type="text"
-                      value={formData.album}
+                      name="album_id"
+                      value={formData.album_id}
                       onChange={handleChange}
-                      placeholder="Enter album name"
-                    />
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                    >
+                      <option value="">Select album (optional)</option>
+                      {albums
+                        .filter(album => !formData.artist_id || true) // Filter by artist_id if needed
+                        .map((album) => (
+                          <option key={album.id} value={album.id}>
+                            {album.title} - {album.artist}
+                          </option>
+                        ))}
+                    </select>
                   </div>
 
                   {/* Genre */}
@@ -232,12 +563,15 @@ export default function CreateMusic() {
                       required
                       value={formData.genre}
                       onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                      disabled={isLoadingGenres}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <option value="">Select genre</option>
+                      <option value="">
+                        {isLoadingGenres ? 'Loading genres...' : 'Select genre'}
+                      </option>
                       {genres.map((genre) => (
-                        <option key={genre} value={genre}>
-                          {genre}
+                        <option key={genre.id} value={genre.name}>
+                          {genre.name}
                         </option>
                       ))}
                     </select>
@@ -261,14 +595,14 @@ export default function CreateMusic() {
 
                   {/* Release Date */}
                   <div>
-                    <label htmlFor="releaseDate" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="release_date" className="block text-sm font-medium text-gray-700 mb-2">
                       Release Date
                     </label>
                     <Input
-                      id="releaseDate"
-                      name="releaseDate"
+                      id="release_date"
+                      name="release_date"
                       type="date"
-                      value={formData.releaseDate}
+                      value={formData.release_date}
                       onChange={handleChange}
                     />
                   </div>

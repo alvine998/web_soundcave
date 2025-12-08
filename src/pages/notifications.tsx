@@ -177,44 +177,6 @@ export default function Notifications() {
             </p>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📬</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{notifications.length}</p>
-              <p className="text-sm text-gray-600">Total Notifications</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📩</span>
-              </div>
-              <p className="text-2xl font-bold text-blue-600">{unreadCount}</p>
-              <p className="text-sm text-gray-600">Unread</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">✅</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {notifications.length - unreadCount}
-              </p>
-              <p className="text-sm text-gray-600">Read</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📅</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {new Set(notifications.map((n) => n.date)).size}
-              </p>
-              <p className="text-sm text-gray-600">Active Days</p>
-            </div>
-          </div>
 
           {/* Filters and Search */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">

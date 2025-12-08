@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import Head from 'next/head';
-import Layout from '@/components/Layout';
-import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast';
+import { useState, useEffect } from "react";
+import Head from "next/head";
+import Layout from "@/components/Layout";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
+import { Pagination } from "@/components/Pagination";
 import {
   Dialog,
   DialogContent,
@@ -10,89 +11,249 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
+import axios from "axios";
+import { CONFIG } from "@/config";
+import toast from "react-hot-toast";
 
 interface MusicVideo {
   id: number;
   title: string;
+  artist_id: number;
   artist: string;
-  director: string;
+  release_date: string;
   duration: string;
-  releaseDate: string;
-  views: number;
-  description: string;
-  videoUrl?: string;
-  thumbnailUrl?: string;
+  genre: string;
+  description: string | null;
+  video_url: string;
+  thumbnail: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 export default function MusicVideos() {
   const { success, error, warning } = useToast();
-  
-  const [videos, setVideos] = useState<MusicVideo[]>([
-    {
-      id: 1,
-      title: 'Summer Vibes',
-      artist: 'The Waves',
-      director: 'John Smith',
-      duration: '3:45',
-      releaseDate: '2024-01-15',
-      views: 1250000,
-      description: 'Official music video for Summer Vibes featuring beach scenes',
-    },
-    {
-      id: 2,
-      title: 'Midnight Dreams',
-      artist: 'Luna Echo',
-      duration: '4:12',
-      director: 'Sarah Johnson',
-      releaseDate: '2024-02-10',
-      views: 890000,
-      description: 'A visual journey through neon-lit cityscapes',
-    },
-    {
-      id: 3,
-      title: 'Ocean Waves',
-      artist: 'Nature Sounds',
-      director: 'Mike Chen',
-      duration: '3:28',
-      releaseDate: '2024-01-20',
-      views: 650000,
-      description: 'Calming visuals paired with ambient ocean sounds',
-    },
-  ]);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [videos, setVideos] = useState<MusicVideo[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterArtist, setFilterArtist] = useState("all");
+  const [filterGenre, setFilterGenre] = useState("all");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<MusicVideo | null>(null);
   const [formData, setFormData] = useState({
-    title: '',
-    artist: '',
-    director: '',
-    duration: '',
-    releaseDate: '',
-    description: '',
+    title: "",
+    artist_id: "",
+    artist: "",
+    genre: "",
+    duration: "",
+    release_date: "",
+    description: "",
+    video_url: "",
+    thumbnail: "",
   });
+  const [artists, setArtists] = useState<Array<{ id: number; name: string }>>(
+    []
+  );
+  const [genres, setGenres] = useState<Array<{ id: number; name: string }>>(
+    []
+  );
+  const [isLoadingArtists, setIsLoadingArtists] = useState(false);
+  const [isLoadingGenres, setIsLoadingGenres] = useState(false);
 
-  // Available artists
-  const availableArtists = [
-    'The Waves',
-    'Luna Echo',
-    'Nature Sounds',
-    'Urban Beats',
-    'Classical Masters',
-    'Thunder Strike',
-  ];
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
+    }
+    return null;
+  };
+
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
+  };
+
+  // Fetch music videos from API
+  const fetchMusicVideos = async (pageParam = 1, query?: string) => {
+    try {
+      setIsLoading(true);
+      const params: Record<string, any> = {
+        page: pageParam,
+        limit: pageSize,
+        sort_by: sortBy,
+        order: order,
+      };
+
+      if (query) {
+        params.search = query;
+      }
+      if (filterArtist !== "all") {
+        params.artist_id = filterArtist;
+      }
+      if (filterGenre !== "all") {
+        params.genre = filterGenre;
+      }
+
+      const response = await axios.get(
+        `${CONFIG.API_URL}/api/music-videos`,
+        {
+          params,
+          ...getAuthHeaders(),
+        }
+      );
+
+      if (response.data?.success && response.data?.data) {
+        const videosList = response.data.data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          artist_id: item.artist_id,
+          artist: item.artist,
+          release_date: item.release_date,
+          duration: item.duration,
+          genre: item.genre,
+          description: item.description || null,
+          video_url: item.video_url,
+          thumbnail: item.thumbnail || null,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          deleted_at: item.deleted_at || null,
+        }));
+        setVideos(videosList);
+
+        if (response.data?.pagination) {
+          setPage(response.data.pagination.page);
+          setTotal(response.data.pagination.total);
+          setTotalPages(response.data.pagination.pages);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch music videos:", err);
+      const msg =
+        err?.response?.data?.message ||
+        "Failed to fetch music videos. Please try again.";
+      error("Failed to Fetch Videos", msg);
+      toast.error(msg);
+      setVideos([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch artists from API
+  const fetchArtists = async () => {
+    try {
+      setIsLoadingArtists(true);
+      const response = await axios.get(`${CONFIG.API_URL}/api/artists`, {
+        params: {
+          page: 1,
+          limit: 100, // Get all artists
+        },
+        ...getAuthHeaders(),
+      });
+
+      if (response.data?.success && response.data?.data) {
+        const artistsList = response.data.data.map(
+          (artist: { id: number; name: string }) => ({
+            id: artist.id,
+            name: artist.name,
+          })
+        );
+        setArtists(artistsList);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch artists:", err);
+      setArtists([]);
+    } finally {
+      setIsLoadingArtists(false);
+    }
+  };
+
+  // Fetch genres from API
+  const fetchGenres = async () => {
+    try {
+      setIsLoadingGenres(true);
+      const response = await axios.get(`${CONFIG.API_URL}/api/genres`, {
+        params: {
+          page: 1,
+          limit: 100, // Get all genres
+        },
+        ...getAuthHeaders(),
+      });
+
+      if (response.data?.success && response.data?.data) {
+        const genresList = response.data.data.map(
+          (genre: { id: number; name: string }) => ({
+            id: genre.id,
+            name: genre.name,
+          })
+        );
+        setGenres(genresList);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch genres:", err);
+      setGenres([]);
+    } finally {
+      setIsLoadingGenres(false);
+    }
+  };
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchMusicVideos(1, searchQuery);
+    }, 500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  // Fetch on filter/sort change
+  useEffect(() => {
+    fetchMusicVideos(1, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterArtist, filterGenre, sortBy, order]);
+
+  // Fetch on page change
+  useEffect(() => {
+    fetchMusicVideos(page, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchMusicVideos();
+    fetchArtists();
+    fetchGenres();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddClick = () => {
     setFormData({
-      title: '',
-      artist: '',
-      director: '',
-      duration: '',
-      releaseDate: '',
-      description: '',
+      title: "",
+      artist_id: "",
+      artist: "",
+      genre: "",
+      duration: "",
+      release_date: "",
+      description: "",
+      video_url: "",
+      thumbnail: "",
     });
     setIsAddModalOpen(true);
   };
@@ -101,11 +262,14 @@ export default function MusicVideos() {
     setSelectedVideo(video);
     setFormData({
       title: video.title,
+      artist_id: video.artist_id.toString(),
       artist: video.artist,
-      director: video.director,
+      genre: video.genre,
       duration: video.duration,
-      releaseDate: video.releaseDate,
-      description: video.description,
+      release_date: video.release_date.split("T")[0],
+      description: video.description || "",
+      video_url: video.video_url,
+      thumbnail: video.thumbnail || "",
     });
     setIsEditModalOpen(true);
   };
@@ -115,74 +279,161 @@ export default function MusicVideos() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newVideo: MusicVideo = {
-        id: videos.length + 1,
+      const token = getAuthToken();
+
+      const payload = {
         title: formData.title,
-        artist: formData.artist,
-        director: formData.director,
+        artist:
+          artists.find((artist) => artist.id === parseInt(formData.artist_id))
+            ?.name || "",
+        artist_id: parseInt(formData.artist_id),
+        genre: formData.genre,
+        release_date: formData.release_date,
         duration: formData.duration,
-        releaseDate: formData.releaseDate,
-        views: 0,
-        description: formData.description,
+        description: formData.description || null,
+        video_url: formData.video_url || "",
+        thumbnail: formData.thumbnail || null,
       };
-      setVideos([...videos, newVideo]);
-      setIsAddModalOpen(false);
-      setFormData({
-        title: '',
-        artist: '',
-        director: '',
-        duration: '',
-        releaseDate: '',
-        description: '',
-      });
-      success('Music Video Added', `${formData.title} has been added successfully.`);
-    } catch (err) {
-      error('Failed to Add Video', 'An error occurred. Please try again.');
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/music-videos`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success) {
+        setIsAddModalOpen(false);
+        setFormData({
+          title: "",
+          artist_id: "",
+          artist: "",
+          genre: "",
+          duration: "",
+          release_date: "",
+          description: "",
+          video_url: "",
+          thumbnail: "",
+        });
+        success(
+          "Music Video Added",
+          `${formData.title} has been added successfully.`
+        );
+        toast.success("Music video berhasil ditambahkan!");
+        fetchMusicVideos(page, searchQuery);
+      } else {
+        throw new Error(response.data?.message || "Failed to add video");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        "Failed to add music video. Please try again.";
+      error("Failed to Add Video", msg);
+      toast.error(msg);
     }
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedVideo) {
-      try {
-        setVideos(
-          videos.map((video) =>
-            video.id === selectedVideo.id
-              ? {
-                  ...video,
-                  title: formData.title,
-                  artist: formData.artist,
-                  director: formData.director,
-                  duration: formData.duration,
-                  releaseDate: formData.releaseDate,
-                  description: formData.description,
-                }
-              : video
-          )
-        );
+    if (!selectedVideo) return;
+
+    try {
+      const token = getAuthToken();
+
+      const payload = {
+        title: formData.title,
+        artist:
+          artists.find((artist) => artist.id === parseInt(formData.artist_id))
+            ?.name || "",
+        artist_id: parseInt(formData.artist_id),
+        genre: formData.genre,
+        release_date: formData.release_date,
+        duration: formData.duration,
+        description: formData.description || null,
+        video_url: formData.video_url || "",
+        thumbnail: formData.thumbnail || null,
+      };
+
+      const response = await axios.put(
+        `${CONFIG.API_URL}/api/music-videos/${selectedVideo.id}`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success) {
         setIsEditModalOpen(false);
         setSelectedVideo(null);
-        success('Video Updated', `${formData.title} has been updated.`);
-      } catch (err) {
-        error('Failed to Update', 'An error occurred. Please try again.');
+        setFormData({
+          title: "",
+          artist_id: "",
+          artist: "",
+          genre: "",
+          duration: "",
+          release_date: "",
+          description: "",
+          video_url: "",
+          thumbnail: "",
+        });
+        success("Video Updated", `${formData.title} has been updated.`);
+        toast.success("Music video berhasil diperbarui!");
+        fetchMusicVideos(page, searchQuery);
+      } else {
+        throw new Error(response.data?.message || "Failed to update video");
       }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        "Failed to update music video. Please try again.";
+      error("Failed to Update", msg);
+      toast.error(msg);
     }
   };
 
-  const handleDeleteConfirm = () => {
-    if (selectedVideo) {
-      try {
-        const videoTitle = selectedVideo.title;
-        setVideos(videos.filter((video) => video.id !== selectedVideo.id));
+  const handleDeleteConfirm = async () => {
+    if (!selectedVideo) return;
+
+    const videoTitle = selectedVideo.title;
+
+    try {
+      const token = getAuthToken();
+
+      const response = await axios.delete(
+        `${CONFIG.API_URL}/api/music-videos/${selectedVideo.id}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success) {
         setIsDeleteModalOpen(false);
         setSelectedVideo(null);
-        warning('Video Deleted', `${videoTitle} has been removed.`);
-      } catch (err) {
-        error('Failed to Delete', 'An error occurred. Please try again.');
+        warning("Video Deleted", `${videoTitle} has been removed.`);
+        toast.success("Music video berhasil dihapus!");
+        fetchMusicVideos(page, searchQuery);
+      } else {
+        throw new Error(response.data?.message || "Failed to delete video");
       }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        "Failed to delete music video. Please try again.";
+      error("Failed to Delete", msg);
+      toast.error(msg);
     }
   };
 
@@ -211,131 +462,189 @@ export default function MusicVideos() {
             <p className="text-gray-600">Kelola semua music video di platform Anda</p>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎬</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{videos.length}</p>
-              <p className="text-sm text-gray-600">Total Videos</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">👁️</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {(videos.reduce((acc, v) => acc + v.views, 0) / 1000000).toFixed(1)}M
-              </p>
-              <p className="text-sm text-gray-600">Total Views</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎤</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {new Set(videos.map((v) => v.artist)).size}
-              </p>
-              <p className="text-sm text-gray-600">Artists</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📅</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {new Date().getFullYear()}
-              </p>
-              <p className="text-sm text-gray-600">Current Year</p>
-            </div>
-          </div>
 
           {/* Search and Actions */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="relative flex-1 max-w-md">
-                <Input
-                  type="text"
-                  placeholder="Cari video atau artist..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-                <svg
-                  className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            <div className="flex flex-col gap-4">
+              {/* Top Row - Search and Add Button */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="relative flex-1 max-w-md">
+                  <Input
+                    type="text"
+                    placeholder="Cari video atau artist..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
                   />
-                </svg>
+                  <svg
+                    className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+
+                <button
+                  onClick={handleAddClick}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
+                >
+                  + Add Video
+                </button>
               </div>
 
-              <button
-                onClick={handleAddClick}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                + Add Video
-              </button>
+              {/* Bottom Row - Filters */}
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={filterArtist}
+                  onChange={(e) => setFilterArtist(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[140px]"
+                >
+                  <option value="all">All Artists</option>
+                  {artists.map((artist) => (
+                    <option key={artist.id} value={artist.id}>
+                      {artist.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={filterGenre}
+                  onChange={(e) => setFilterGenre(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[140px]"
+                >
+                  <option value="all">All Genres</option>
+                  {genres.map((genre) => (
+                    <option key={genre.id} value={genre.name}>
+                      {genre.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[140px]"
+                >
+                  <option value="created_at">Terbaru</option>
+                  <option value="title">Judul (A-Z)</option>
+                  <option value="release_date">Release Date</option>
+                </select>
+
+                <select
+                  value={order}
+                  onChange={(e) => setOrder(e.target.value as "asc" | "desc")}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[100px]"
+                >
+                  <option value="desc">Desc</option>
+                  <option value="asc">Asc</option>
+                </select>
+              </div>
             </div>
           </div>
 
           {/* Videos Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredVideos.map((video) => (
-              <div
-                key={video.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-              >
-                {/* Thumbnail */}
-                <div className="h-48 bg-linear-to-br from-red-400 to-pink-600 flex items-center justify-center">
-                  <span className="text-6xl">🎬</span>
-                </div>
-
-                {/* Content */}
-                <div className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{video.title}</h3>
-                  <p className="text-sm text-gray-600 mb-3">{video.artist}</p>
-                  
-                  <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
-                    <span>👁️ {(video.views / 1000).toFixed(0)}K views</span>
-                    <span>⏱️ {video.duration}</span>
-                  </div>
-
-                  <p className="text-xs text-gray-500 mb-4 line-clamp-2">{video.description}</p>
-
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleEditClick(video)}
-                      className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(video)}
-                      className="px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm"
-                    >
-                      Delete
-                    </button>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-pulse"
+                >
+                  <div className="h-48 bg-gray-200"></div>
+                  <div className="p-6">
+                    <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded mb-4"></div>
+                    <div className="h-10 bg-gray-200 rounded"></div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Empty State */}
-          {filteredVideos.length === 0 && (
+              ))}
+            </div>
+          ) : videos.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <span className="text-6xl mb-4 block">🎬</span>
               <p className="text-gray-600">No music videos found</p>
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                {videos.map((video) => (
+                  <div
+                    key={video.id}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+                  >
+                    {/* Thumbnail */}
+                    <div className="h-48 bg-gradient-to-br from-red-400 to-pink-600 flex items-center justify-center overflow-hidden">
+                      {video.thumbnail ? (
+                        <img
+                          src={video.thumbnail}
+                          alt={video.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-6xl">🎬</span>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                        {video.title}
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-2">{video.artist}</p>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                          {video.genre}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ⏱️ {video.duration}
+                        </span>
+                      </div>
+
+                      {video.description && (
+                        <p className="text-xs text-gray-500 mb-4 line-clamp-2">
+                          {video.description}
+                        </p>
+                      )}
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleEditClick(video)}
+                          className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(video)}
+                          className="px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {total > 0 && (
+                <Pagination
+                  total={total}
+                  page={page}
+                  pageSize={pageSize}
+                  onPageChange={(nextPage) => {
+                    const query = searchQuery.trim() || undefined;
+                    fetchMusicVideos(nextPage, query);
+                  }}
+                />
+              )}
+            </>
           )}
         </div>
       </Layout>
@@ -351,7 +660,10 @@ export default function MusicVideos() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
               <div>
-                <label htmlFor="add-title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-title"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Video Title <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -360,47 +672,69 @@ export default function MusicVideos() {
                   required
                   value={formData.title}
                   onChange={handleChange}
-                  placeholder="e.g. Summer Vibes"
+                  placeholder="e.g. Midnight Dreams Official Video"
                 />
               </div>
 
               <div>
-                <label htmlFor="add-artist" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-artist"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Artist <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="add-artist"
-                  name="artist"
+                  name="artist_id"
                   required
-                  value={formData.artist}
+                  value={formData.artist_id}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                  disabled={isLoadingArtists}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select artist</option>
-                  {availableArtists.map((artist) => (
-                    <option key={artist} value={artist}>
-                      {artist}
+                  <option value="">
+                    {isLoadingArtists ? "Loading artists..." : "Select artist"}
+                  </option>
+                  {artists.map((artist) => (
+                    <option key={artist.id} value={artist.id}>
+                      {artist.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="add-director" className="block text-sm font-medium text-gray-700 mb-2">
-                  Director <span className="text-red-500">*</span>
+                <label
+                  htmlFor="add-genre"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Genre <span className="text-red-500">*</span>
                 </label>
-                <Input
-                  id="add-director"
-                  name="director"
+                <select
+                  id="add-genre"
+                  name="genre"
                   required
-                  value={formData.director}
+                  value={formData.genre}
                   onChange={handleChange}
-                  placeholder="e.g. John Smith"
-                />
+                  disabled={isLoadingGenres}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {isLoadingGenres ? "Loading genres..." : "Select genre"}
+                  </option>
+                  {genres.map((genre) => (
+                    <option key={genre.id} value={genre.name}>
+                      {genre.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label htmlFor="add-duration" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-duration"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Duration <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -409,32 +743,72 @@ export default function MusicVideos() {
                   required
                   value={formData.duration}
                   onChange={handleChange}
-                  placeholder="e.g. 3:45"
+                  placeholder="e.g. 04:32"
                 />
               </div>
 
               <div>
-                <label htmlFor="add-date" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="add-date"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Release Date <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="add-date"
-                  name="releaseDate"
+                  name="release_date"
                   type="date"
                   required
-                  value={formData.releaseDate}
+                  value={formData.release_date}
                   onChange={handleChange}
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="add-description" className="block text-sm font-medium text-gray-700 mb-2">
-                  Description <span className="text-red-500">*</span>
+                <label
+                  htmlFor="add-video-url"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Video URL <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  id="add-video-url"
+                  name="video_url"
+                  type="url"
+                  required
+                  value={formData.video_url}
+                  onChange={handleChange}
+                  placeholder="https://youtube.com/watch?v=..."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="add-thumbnail"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Thumbnail URL
+                </label>
+                <Input
+                  id="add-thumbnail"
+                  name="thumbnail"
+                  type="url"
+                  value={formData.thumbnail}
+                  onChange={handleChange}
+                  placeholder="https://example.com/thumbnails/..."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="add-description"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Description
                 </label>
                 <textarea
                   id="add-description"
                   name="description"
-                  required
                   value={formData.description}
                   onChange={handleChange}
                   rows={3}
@@ -474,7 +848,10 @@ export default function MusicVideos() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
               <div>
-                <label htmlFor="edit-title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-title"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Video Title <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -483,47 +860,69 @@ export default function MusicVideos() {
                   required
                   value={formData.title}
                   onChange={handleChange}
-                  placeholder="e.g. Summer Vibes"
+                  placeholder="e.g. Midnight Dreams Official Video"
                 />
               </div>
 
               <div>
-                <label htmlFor="edit-artist" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-artist"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Artist <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="edit-artist"
-                  name="artist"
+                  name="artist_id"
                   required
-                  value={formData.artist}
+                  value={formData.artist_id}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900"
+                  disabled={isLoadingArtists}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select artist</option>
-                  {availableArtists.map((artist) => (
-                    <option key={artist} value={artist}>
-                      {artist}
+                  <option value="">
+                    {isLoadingArtists ? "Loading artists..." : "Select artist"}
+                  </option>
+                  {artists.map((artist) => (
+                    <option key={artist.id} value={artist.id}>
+                      {artist.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="edit-director" className="block text-sm font-medium text-gray-700 mb-2">
-                  Director <span className="text-red-500">*</span>
+                <label
+                  htmlFor="edit-genre"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Genre <span className="text-red-500">*</span>
                 </label>
-                <Input
-                  id="edit-director"
-                  name="director"
+                <select
+                  id="edit-genre"
+                  name="genre"
                   required
-                  value={formData.director}
+                  value={formData.genre}
                   onChange={handleChange}
-                  placeholder="e.g. John Smith"
-                />
+                  disabled={isLoadingGenres}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {isLoadingGenres ? "Loading genres..." : "Select genre"}
+                  </option>
+                  {genres.map((genre) => (
+                    <option key={genre.id} value={genre.name}>
+                      {genre.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label htmlFor="edit-duration" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-duration"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Duration <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -532,32 +931,72 @@ export default function MusicVideos() {
                   required
                   value={formData.duration}
                   onChange={handleChange}
-                  placeholder="e.g. 3:45"
+                  placeholder="e.g. 04:32"
                 />
               </div>
 
               <div>
-                <label htmlFor="edit-date" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="edit-date"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Release Date <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="edit-date"
-                  name="releaseDate"
+                  name="release_date"
                   type="date"
                   required
-                  value={formData.releaseDate}
+                  value={formData.release_date}
                   onChange={handleChange}
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 mb-2">
-                  Description <span className="text-red-500">*</span>
+                <label
+                  htmlFor="edit-video-url"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Video URL <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  id="edit-video-url"
+                  name="video_url"
+                  type="url"
+                  required
+                  value={formData.video_url}
+                  onChange={handleChange}
+                  placeholder="https://youtube.com/watch?v=..."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="edit-thumbnail"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Thumbnail URL
+                </label>
+                <Input
+                  id="edit-thumbnail"
+                  name="thumbnail"
+                  type="url"
+                  value={formData.thumbnail}
+                  onChange={handleChange}
+                  placeholder="https://example.com/thumbnails/..."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="edit-description"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Description
                 </label>
                 <textarea
                   id="edit-description"
                   name="description"
-                  required
                   value={formData.description}
                   onChange={handleChange}
                   rows={3}

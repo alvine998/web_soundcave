@@ -40,12 +40,22 @@ Dokumentasi lengkap untuk semua payload JSON yang digunakan dalam aplikasi Sound
 ```json
 {
   "success": true,
-  "token": "string",
-  "user": {
-    "id": "number",
-    "name": "string",
-    "email": "string",
-    "role": "string"
+  "message": "Login berhasil",
+  "data": {
+    "token": "string",
+    "user": {
+      "id": "number",
+      "full_name": "string",
+      "email": "string",
+      "phone": "string",
+      "location": "string",
+      "bio": "string",
+      "profile_image": "string | null",
+      "role": "string",
+      "created_at": "string",
+      "updated_at": "string",
+      "deleted_at": "string | null"
+    }
   }
 }
 ```

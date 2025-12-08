@@ -1,92 +1,287 @@
-import { useState } from 'react';
-import Head from 'next/head';
-import Layout from '@/components/Layout';
-import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast';
+import { useState, useEffect } from "react";
+import Head from "next/head";
+import Layout from "@/components/Layout";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
+import axios from "axios";
+import { CONFIG } from "@/config";
+import toast from "react-hot-toast";
+
+interface AppInfo {
+  id?: number;
+  app_name: string;
+  tagline: string;
+  description: string;
+  version: string;
+  launch_date: string;
+  email: string;
+  phone: string;
+  address: string;
+  social_media: {
+    facebook?: string;
+    twitter?: string;
+    instagram?: string;
+    youtube?: string;
+  };
+  app_links: {
+    ios?: string;
+    android?: string;
+    web?: string;
+  };
+  legal: {
+    privacy_policy?: string;
+    terms_of_service?: string;
+    cookie_policy?: string;
+  };
+  features: {
+    offline_mode: boolean;
+    high_quality_audio: boolean;
+    unlimited_playlists: boolean;
+    ad_free: boolean;
+  };
+  stats: {
+    total_users: number;
+    total_songs: number;
+    total_albums: number;
+  };
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+}
 
 export default function AboutApps() {
   const { success, error } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [appInfoId, setAppInfoId] = useState<number | null>(null);
 
-  const [appData, setAppData] = useState({
-    appName: 'SoundCave',
-    tagline: 'Your Ultimate Music Streaming Platform',
-    description: 'SoundCave adalah platform streaming musik terlengkap di Indonesia. Nikmati jutaan lagu dari berbagai genre, artis lokal dan internasional, podcast eksklusif, dan video musik berkualitas tinggi. Dengan fitur playlist personal, rekomendasi AI, dan audio berkualitas lossless.',
-    version: '1.0.0',
-    launchDate: '2024-01-01',
-    
-    // Contact Information
-    email: 'support@soundcave.com',
-    phone: '+62 21-1234-5678',
-    address: 'Jl. Sudirman No. 123, Jakarta Pusat 10220, Indonesia',
-    
-    // Social Media
-    facebook: 'https://facebook.com/soundcave',
-    instagram: 'https://instagram.com/soundcave',
-    twitter: 'https://twitter.com/soundcave',
-    youtube: 'https://youtube.com/soundcave',
-    linkedin: 'https://linkedin.com/company/soundcave',
-    
-    // App Links
-    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.soundcave',
-    appStoreUrl: 'https://apps.apple.com/app/soundcave/id123456789',
-    
-    // Legal & Support
-    privacyPolicyUrl: '/privacy-policy',
-    termsOfServiceUrl: '/terms-of-service',
-    supportUrl: '/support',
-    
-    // Features
-    features: [
-      'Streaming musik unlimited',
-      'Kualitas audio lossless hingga 320kbps',
-      'Offline mode untuk Premium users',
-      'Playlist personal dan rekomendasi AI',
-      'Music videos dan podcasts',
-      'Lyrics sync dengan musik',
-      'Cross-platform support',
-      'Family sharing untuk paket keluarga',
-    ],
-    
-    // Stats
-    totalUsers: '1,000,000+',
-    totalSongs: '50 juta+',
-    totalArtists: '500,000+',
-    totalPodcasts: '10,000+',
+  const [appData, setAppData] = useState<AppInfo>({
+    app_name: "",
+    tagline: "",
+    description: "",
+    version: "",
+    launch_date: "",
+    email: "",
+    phone: "",
+    address: "",
+    social_media: {
+      facebook: "",
+      twitter: "",
+      instagram: "",
+      youtube: "",
+    },
+    app_links: {
+      ios: "",
+      android: "",
+      web: "",
+    },
+    legal: {
+      privacy_policy: "",
+      terms_of_service: "",
+      cookie_policy: "",
+    },
+    features: {
+      offline_mode: false,
+      high_quality_audio: false,
+      unlimited_playlists: false,
+      ad_free: false,
+    },
+    stats: {
+      total_users: 0,
+      total_songs: 0,
+      total_albums: 0,
+    },
   });
 
-  const [tempAppData, setTempAppData] = useState(appData);
+  const [tempAppData, setTempAppData] = useState<AppInfo>(appData);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setTempAppData((prev) => ({ ...prev, [name]: value }));
+  // Helper function untuk mendapatkan token dari localStorage
+  const getAuthToken = (): string | null => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("soundcave_token");
+    }
+    return null;
   };
 
-  const handleFeatureChange = (index: number, value: string) => {
-    const newFeatures = [...tempAppData.features];
-    newFeatures[index] = value;
-    setTempAppData((prev) => ({ ...prev, features: newFeatures }));
+  // Helper function untuk mendapatkan headers dengan Authorization
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
   };
 
-  const handleAddFeature = () => {
-    setTempAppData((prev) => ({
-      ...prev,
-      features: [...prev.features, ''],
-    }));
-  };
-
-  const handleRemoveFeature = (index: number) => {
-    const newFeatures = tempAppData.features.filter((_, i) => i !== index);
-    setTempAppData((prev) => ({ ...prev, features: newFeatures }));
-  };
-
-  const handleSave = () => {
+  // Fetch app info (assuming id = 1 for now, or we can get from API)
+  const fetchAppInfo = async () => {
     try {
-      setAppData(tempAppData);
-      setIsEditing(false);
-      success('App Info Updated', 'Application information has been saved successfully.');
-    } catch (err) {
-      error('Update Failed', 'Failed to update app information. Please try again.');
+      setIsLoading(true);
+      // Try to fetch with id = 1 first
+      const response = await axios.get(
+        `${CONFIG.API_URL}/api/app-info/1`,
+        getAuthHeaders()
+      );
+
+      if (response.data?.success && response.data?.data) {
+        const data = response.data.data;
+        setAppInfoId(data.id);
+        setAppData(data);
+        setTempAppData(data);
+      }
+    } catch (err: any) {
+      // If not found, that's okay - we'll create new one
+      console.log("App info not found, will create new one");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAppInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+
+    if (name.startsWith("social_media.")) {
+      const key = name.split(".")[1];
+      setTempAppData((prev) => ({
+        ...prev,
+        social_media: {
+          ...prev.social_media,
+          [key]: value,
+        },
+      }));
+    } else if (name.startsWith("app_links.")) {
+      const key = name.split(".")[1];
+      setTempAppData((prev) => ({
+        ...prev,
+        app_links: {
+          ...prev.app_links,
+          [key]: value,
+        },
+      }));
+    } else if (name.startsWith("legal.")) {
+      const key = name.split(".")[1];
+      setTempAppData((prev) => ({
+        ...prev,
+        legal: {
+          ...prev.legal,
+          [key]: value,
+        },
+      }));
+    } else if (name.startsWith("features.")) {
+      const key = name.split(".")[1];
+      setTempAppData((prev) => ({
+        ...prev,
+        features: {
+          ...prev.features,
+          [key]: type === "checkbox" ? checked : value === "true",
+        },
+      }));
+    } else if (name.startsWith("stats.")) {
+      const key = name.split(".")[1];
+      setTempAppData((prev) => ({
+        ...prev,
+        stats: {
+          ...prev.stats,
+          [key]: parseInt(value) || 0,
+        },
+      }));
+    } else {
+      setTempAppData((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const token = getAuthToken();
+
+      // Format launch_date to YYYY-MM-DD only (remove time part if exists)
+      let launchDate = tempAppData.launch_date;
+      if (launchDate) {
+        // If it contains 'T', split and take only the date part
+        if (launchDate.includes('T')) {
+          launchDate = launchDate.split('T')[0];
+        }
+        // If it contains space, split and take only the date part
+        if (launchDate.includes(' ')) {
+          launchDate = launchDate.split(' ')[0];
+        }
+      }
+
+      const payload = {
+        app_name: tempAppData.app_name,
+        tagline: tempAppData.tagline,
+        description: tempAppData.description,
+        version: tempAppData.version,
+        launch_date: launchDate || "",
+        email: tempAppData.email,
+        phone: tempAppData.phone,
+        address: tempAppData.address,
+        social_media: tempAppData.social_media,
+        app_links: tempAppData.app_links,
+        legal: tempAppData.legal,
+        features: tempAppData.features,
+        stats: tempAppData.stats,
+      };
+
+      let response;
+      
+      // If appInfoId exists, use PUT to update
+      if (appInfoId) {
+        response = await axios.put(
+          `${CONFIG.API_URL}/api/app-info/${appInfoId}`,
+          payload,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: token ? `Bearer ${token}` : "",
+            },
+          }
+        );
+      } else {
+        // Otherwise, use POST to create new
+        response = await axios.post(
+          `${CONFIG.API_URL}/api/app-info`,
+          payload,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: token ? `Bearer ${token}` : "",
+            },
+          }
+        );
+      }
+
+      if (response.data?.success) {
+        if (response.data?.data?.id) {
+          setAppInfoId(response.data.data.id);
+        }
+        setAppData(tempAppData);
+        setIsEditing(false);
+        success(
+          "App Info Updated",
+          "Application information has been saved successfully."
+        );
+        toast.success("App info berhasil disimpan!");
+        // Refresh data
+        fetchAppInfo();
+      } else {
+        throw new Error(response.data?.message || "Failed to save");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        "Failed to update app information. Please try again.";
+      error("Update Failed", msg);
+      toast.error(msg);
     }
   };
 
@@ -108,41 +303,6 @@ export default function AboutApps() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">About Application</h1>
             <p className="text-gray-600">Kelola informasi dan deskripsi aplikasi SoundCave</p>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">👥</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{appData.totalUsers}</p>
-              <p className="text-sm text-gray-600">Total Users</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎵</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{appData.totalSongs}</p>
-              <p className="text-sm text-gray-600">Total Songs</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎤</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{appData.totalArtists}</p>
-              <p className="text-sm text-gray-600">Total Artists</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">🎙️</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{appData.totalPodcasts}</p>
-              <p className="text-sm text-gray-600">Total Podcasts</p>
-            </div>
           </div>
 
           {/* Main Content */}
@@ -184,11 +344,11 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="text"
-                    name="appName"
-                    value={tempAppData.appName}
+                    name="app_name"
+                    value={tempAppData.app_name}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                   />
                 </div>
 
@@ -203,7 +363,7 @@ export default function AboutApps() {
                     value={tempAppData.tagline}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                   />
                 </div>
 
@@ -218,7 +378,7 @@ export default function AboutApps() {
                     value={tempAppData.version}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                   />
                 </div>
 
@@ -229,11 +389,22 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="date"
-                    name="launchDate"
-                    value={tempAppData.launchDate}
-                    onChange={handleChange}
+                    name="launch_date"
+                    value={
+                      tempAppData.launch_date
+                        ? tempAppData.launch_date.split("T")[0].split(" ")[0]
+                        : ""
+                    }
+                    onChange={(e) => {
+                      // Ensure we only store YYYY-MM-DD format
+                      const dateValue = e.target.value;
+                      setTempAppData((prev) => ({
+                        ...prev,
+                        launch_date: dateValue,
+                      }));
+                    }}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                   />
                 </div>
 
@@ -321,11 +492,11 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="url"
-                    name="facebook"
-                    value={tempAppData.facebook}
+                    name="social_media.facebook"
+                    value={tempAppData.social_media.facebook || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                     placeholder="https://facebook.com/..."
                   />
                 </div>
@@ -337,11 +508,11 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="url"
-                    name="instagram"
-                    value={tempAppData.instagram}
+                    name="social_media.instagram"
+                    value={tempAppData.social_media.instagram || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                     placeholder="https://instagram.com/..."
                   />
                 </div>
@@ -353,11 +524,11 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="url"
-                    name="twitter"
-                    value={tempAppData.twitter}
+                    name="social_media.twitter"
+                    value={tempAppData.social_media.twitter || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                     placeholder="https://twitter.com/..."
                   />
                 </div>
@@ -369,28 +540,12 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="url"
-                    name="youtube"
-                    value={tempAppData.youtube}
+                    name="social_media.youtube"
+                    value={tempAppData.social_media.youtube || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                     placeholder="https://youtube.com/..."
-                  />
-                </div>
-
-                {/* LinkedIn */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    💼 LinkedIn
-                  </label>
-                  <Input
-                    type="url"
-                    name="linkedin"
-                    value={tempAppData.linkedin}
-                    onChange={handleChange}
-                    disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="https://linkedin.com/company/..."
                   />
                 </div>
               </div>
@@ -400,36 +555,52 @@ export default function AboutApps() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">App Download Links</h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Play Store */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* iOS */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    🍎 iOS App Store
+                  </label>
+                  <Input
+                    type="url"
+                    name="app_links.ios"
+                    value={tempAppData.app_links.ios || ""}
+                    onChange={handleChange}
+                    disabled={!isEditing}
+                    className={!isEditing ? "bg-gray-50" : ""}
+                    placeholder="https://apps.apple.com/..."
+                  />
+                </div>
+
+                {/* Android */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     📱 Google Play Store
                   </label>
                   <Input
                     type="url"
-                    name="playStoreUrl"
-                    value={tempAppData.playStoreUrl}
+                    name="app_links.android"
+                    value={tempAppData.app_links.android || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
+                    className={!isEditing ? "bg-gray-50" : ""}
                     placeholder="https://play.google.com/..."
                   />
                 </div>
 
-                {/* App Store */}
+                {/* Web */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    🍎 Apple App Store
+                    🌐 Web URL
                   </label>
                   <Input
                     type="url"
-                    name="appStoreUrl"
-                    value={tempAppData.appStoreUrl}
+                    name="app_links.web"
+                    value={tempAppData.app_links.web || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="https://apps.apple.com/..."
+                    className={!isEditing ? "bg-gray-50" : ""}
+                    placeholder="https://soundcave.com"
                   />
                 </div>
               </div>
@@ -447,12 +618,12 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="text"
-                    name="privacyPolicyUrl"
-                    value={tempAppData.privacyPolicyUrl}
+                    name="legal.privacy_policy"
+                    value={tempAppData.legal.privacy_policy || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="/privacy-policy"
+                    className={!isEditing ? "bg-gray-50" : ""}
+                    placeholder="https://soundcave.com/privacy"
                   />
                 </div>
 
@@ -463,28 +634,28 @@ export default function AboutApps() {
                   </label>
                   <Input
                     type="text"
-                    name="termsOfServiceUrl"
-                    value={tempAppData.termsOfServiceUrl}
+                    name="legal.terms_of_service"
+                    value={tempAppData.legal.terms_of_service || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="/terms-of-service"
+                    className={!isEditing ? "bg-gray-50" : ""}
+                    placeholder="https://soundcave.com/terms"
                   />
                 </div>
 
-                {/* Support */}
+                {/* Cookie Policy */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    💬 Support URL
+                    🍪 Cookie Policy URL
                   </label>
                   <Input
                     type="text"
-                    name="supportUrl"
-                    value={tempAppData.supportUrl}
+                    name="legal.cookie_policy"
+                    value={tempAppData.legal.cookie_policy || ""}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="/support"
+                    className={!isEditing ? "bg-gray-50" : ""}
+                    placeholder="https://soundcave.com/cookies"
                   />
                 </div>
               </div>
@@ -492,110 +663,65 @@ export default function AboutApps() {
 
             {/* Features */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Key Features</h3>
-                {isEditing && (
-                  <button
-                    onClick={handleAddFeature}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                  >
-                    + Add Feature
-                  </button>
-                )}
-              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">
+                Key Features
+              </h3>
 
-              <div className="space-y-3">
-                {tempAppData.features.map((feature, index) => (
-                  <div key={index} className="flex items-center space-x-3">
-                    <span className="text-blue-600 font-bold shrink-0">✓</span>
-                    <Input
-                      type="text"
-                      value={feature}
-                      onChange={(e) => handleFeatureChange(index, e.target.value)}
-                      disabled={!isEditing}
-                      className={`flex-1 ${!isEditing ? 'bg-gray-50' : ''}`}
-                      placeholder="Enter feature..."
-                    />
-                    {isEditing && (
-                      <button
-                        onClick={() => handleRemoveFeature(index)}
-                        className="px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm shrink-0"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Platform Stats */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6">Platform Statistics</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Total Users */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Users
-                  </label>
-                  <Input
-                    type="text"
-                    name="totalUsers"
-                    value={tempAppData.totalUsers}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    name="features.offline_mode"
+                    checked={tempAppData.features.offline_mode}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="e.g. 1,000,000+"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                   />
+                  <label className="text-sm font-medium text-gray-700">
+                    Offline Mode
+                  </label>
                 </div>
 
-                {/* Total Songs */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Songs
-                  </label>
-                  <Input
-                    type="text"
-                    name="totalSongs"
-                    value={tempAppData.totalSongs}
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    name="features.high_quality_audio"
+                    checked={tempAppData.features.high_quality_audio}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="e.g. 50 juta+"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                   />
+                  <label className="text-sm font-medium text-gray-700">
+                    High Quality Audio
+                  </label>
                 </div>
 
-                {/* Total Artists */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Artists
-                  </label>
-                  <Input
-                    type="text"
-                    name="totalArtists"
-                    value={tempAppData.totalArtists}
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    name="features.unlimited_playlists"
+                    checked={tempAppData.features.unlimited_playlists}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="e.g. 500,000+"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                   />
+                  <label className="text-sm font-medium text-gray-700">
+                    Unlimited Playlists
+                  </label>
                 </div>
 
-                {/* Total Podcasts */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Podcasts
-                  </label>
-                  <Input
-                    type="text"
-                    name="totalPodcasts"
-                    value={tempAppData.totalPodcasts}
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    name="features.ad_free"
+                    checked={tempAppData.features.ad_free}
                     onChange={handleChange}
                     disabled={!isEditing}
-                    className={!isEditing ? 'bg-gray-50' : ''}
-                    placeholder="e.g. 10,000+"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                   />
+                  <label className="text-sm font-medium text-gray-700">
+                    Ad Free
+                  </label>
                 </div>
               </div>
             </div>

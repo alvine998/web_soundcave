@@ -35,7 +35,7 @@ export default function Home() {
       );
 
       if (response.data?.success) {
-        const { token, user } = response.data;
+        const { token, user } = response.data.data;
 
         // Simpan token dan data user di localStorage (bisa disesuaikan ke cookies/session)
         if (typeof window !== "undefined") {
@@ -43,7 +43,7 @@ export default function Home() {
           localStorage.setItem("soundcave_user", JSON.stringify(user));
         }
 
-        toast.success("Login berhasil. Selamat datang di SoundCave!");
+        toast.success(response.data.message || "Login berhasil. Selamat datang di SoundCave!");
         router.push("/dashboard");
       } else {
         const message =
