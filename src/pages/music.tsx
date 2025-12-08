@@ -552,13 +552,13 @@ export default function Music() {
               <div className="flex flex-wrap items-center gap-3">
                 {/* Genre Filter */}
                 <div className="flex-shrink-0">
-                  <select
-                    value={filterGenre}
-                    onChange={(e) => setFilterGenre(e.target.value)}
+                <select
+                  value={filterGenre}
+                  onChange={(e) => setFilterGenre(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[140px]"
-                  >
+                >
                     <option value="all">All Genres</option>
-                    {genres.map((genre) => (
+                  {genres.map((genre) => (
                       <option key={genre.id} value={genre.name}>
                         {genre.name}
                       </option>
@@ -592,9 +592,9 @@ export default function Music() {
                     {languages.map((lang) => (
                       <option key={lang} value={lang}>
                         {lang === "all" ? "All Languages" : lang}
-                      </option>
-                    ))}
-                  </select>
+                    </option>
+                  ))}
+                </select>
                 </div>
 
                 {/* Explicit Filter */}
@@ -612,17 +612,17 @@ export default function Music() {
 
                 {/* Sort By */}
                 <div className="flex-shrink-0">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[180px]"
-                  >
+                >
                     <option value="created_at">Terbaru</option>
-                    <option value="title">Judul (A-Z)</option>
+                  <option value="title">Judul (A-Z)</option>
                     <option value="play_count">Paling Banyak Diputar</option>
                     <option value="like_count">Paling Banyak Disukai</option>
-                  </select>
-                </div>
+                </select>
+              </div>
 
                 {/* Order */}
                 <div className="flex-shrink-0">
@@ -690,8 +690,8 @@ export default function Music() {
                         key={music.id}
                         className="hover:bg-gray-50 transition-colors"
                       >
-                        <td className="py-4 px-6">
-                          <div className="flex items-center space-x-3">
+                      <td className="py-4 px-6">
+                        <div className="flex items-center space-x-3">
                             <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center shrink-0 overflow-hidden">
                               {music.cover_image_url ? (
                                 <img
@@ -700,108 +700,108 @@ export default function Music() {
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <span className="text-xl">🎵</span>
+                            <span className="text-xl">🎵</span>
                               )}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">
-                                {music.title}
-                              </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {music.title}
+                            </p>
                               <p className="text-xs text-gray-500">
                                 {new Date(music.created_at).toLocaleDateString()}
                               </p>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 text-sm text-gray-900">
-                          {music.artist}
-                        </td>
-                        <td className="py-4 px-6 text-sm text-gray-700">
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-900">
+                        {music.artist}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
                           {music.album || "-"}
-                        </td>
-                        <td className="py-4 px-6">
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                            {music.genre}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-sm text-gray-700">
-                          {music.duration}
-                        </td>
-                        <td className="py-4 px-6 text-sm text-gray-900 font-medium">
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                          {music.genre}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        {music.duration}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-900 font-medium">
                           {music.play_count.toLocaleString()}
-                        </td>
-                        <td className="py-4 px-6">
-                          <span
-                            className={`px-2 py-1 text-xs font-medium rounded ${
+                      </td>
+                      <td className="py-4 px-6">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded ${
                               !music.deleted_at
                                 ? "bg-green-100 text-green-700"
                                 : "bg-gray-100 text-gray-700"
                             }`}
                           >
                             {!music.deleted_at ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          <div className="flex items-center space-x-3">
-                            <button
-                              onClick={() => router.push(`/music/${music.id}`)}
-                              className="text-blue-600 hover:text-blue-700"
-                              title="View Details"
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => router.push(`/music/${music.id}`)}
+                            className="text-blue-600 hover:text-blue-700"
+                            title="View Details"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
                             >
-                              <svg
-                                className="w-5 h-5"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                                 <path
                                   fillRule="evenodd"
                                   d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
                                   clipRule="evenodd"
                                 />
-                              </svg>
-                            </button>
-                            <button
+                            </svg>
+                          </button>
+                          <button
                               onClick={() => handleEditClick(music)}
-                              className="text-gray-600 hover:text-gray-700"
-                              title="Edit"
+                            className="text-gray-600 hover:text-gray-700"
+                            title="Edit"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
                             >
-                              <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                />
-                              </svg>
-                            </button>
-                            <button
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
+                            </svg>
+                          </button>
+                          <button
                               onClick={() => handleDeleteClick(music)}
-                              className="text-red-600 hover:text-red-700"
-                              title="Delete"
+                            className="text-red-600 hover:text-red-700"
+                            title="Delete"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
                             >
-                              <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                     ))
                   )}
                 </tbody>
