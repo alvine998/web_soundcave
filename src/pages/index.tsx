@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,28 @@ export default function Home() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuth = () => {
+      if (typeof window !== "undefined") {
+        const token = localStorage.getItem("soundcave_token");
+        if (token) {
+          // User is logged in, redirect to dashboard
+          router.push("/dashboard");
+        } else {
+          // User is not logged in, stay on login page
+          setIsCheckingAuth(false);
+        }
+      } else {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +93,25 @@ export default function Home() {
       [name]: type === "checkbox" ? checked : value,
     }));
   };
+
+  // Show loading while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <>
+        <Head>
+          <title>Loading - SoundCave</title>
+          <meta name="description" content="Loading SoundCave" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </Head>
+        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 to-white">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p className="mt-4 text-gray-600">Memuat...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

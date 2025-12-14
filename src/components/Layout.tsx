@@ -1,6 +1,7 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { Input } from "@/components/ui/input";
+import { getAuthToken } from "@/utils/auth";
 
 interface LayoutProps {
   children: ReactNode;
@@ -20,6 +21,20 @@ export default function Layout({ children }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+
+  // Check authentication on mount (only for protected pages, not login page)
+  useEffect(() => {
+    if (router.pathname === "/") {
+      // Skip check for login page
+      return;
+    }
+    
+    const token = getAuthToken();
+    if (!token) {
+      // No token found, redirect to login
+      router.push("/");
+    }
+  }, [router]);
 
   // Sample notifications
   const [notifications] = useState<Notification[]>([
@@ -93,6 +108,12 @@ export default function Layout({ children }: LayoutProps) {
   ];
 
   const handleLogout = () => {
+    // Remove token and user data from localStorage
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("soundcave_token");
+      localStorage.removeItem("soundcave_user");
+    }
+    // Redirect to login page
     router.push("/");
   };
 
