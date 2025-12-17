@@ -101,6 +101,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: "Music Videos", path: "/music-videos", icon: "🎬" },
     { name: "Podcasts", path: "/podcasts", icon: "🎙️" },
     { name: "Playlists", path: "/playlists", icon: "🎧" },
+    { name: "Cavelist", path: "/cavelists", icon: "📱" },
     // { name: 'Subscriptions', path: '/subscriptions', icon: '💳' },
     { name: "News", path: "/news", icon: "📰" },
     { name: "Customer Reports", path: "/reports", icon: "📄" },
