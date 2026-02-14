@@ -178,7 +178,7 @@ interface Album {
   artistId: number;
   artist: string;
   releaseDate: string;
-  albumType: 'single' | 'EP' | 'album' | 'compilation';
+  albumType: "single" | "EP" | "album" | "compilation";
   genre: string;
   totalTracks: number;
   recordLabel?: string;
@@ -193,10 +193,11 @@ interface CreateAlbumRequest {
   artistId: number;
   artist: string;
   releaseDate: string;
-  albumType: 'single' | 'EP' | 'album' | 'compilation';
+  albumType: "single" | "EP" | "album" | "compilation";
   genre: string;
   totalTracks: number;
   recordLabel?: string;
+  coverImageUrl?: string;
 }
 
 interface UpdateAlbumRequest extends Partial<CreateAlbumRequest> {
@@ -483,7 +484,7 @@ interface ChangePasswordRequest {
 }
 
 interface UserPreferences {
-  language: 'id' | 'en';
+  language: "id" | "en";
   timezone: string;
   emailNotifications: boolean;
   pushNotifications: boolean;
@@ -525,7 +526,7 @@ interface PreferencesFormData {
 ## Notifications
 
 ```typescript
-type NotificationType = 'info' | 'success' | 'warning' | 'error';
+type NotificationType = "info" | "success" | "warning" | "error";
 
 interface Notification {
   id: number;
@@ -659,8 +660,8 @@ interface Activity {
 interface AnalyticsQuery {
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
-  metric?: 'streams' | 'users' | 'revenue';
-  groupBy?: 'day' | 'week' | 'month';
+  metric?: "streams" | "users" | "revenue";
+  groupBy?: "day" | "week" | "month";
 }
 
 interface AnalyticsResponse {
@@ -691,7 +692,7 @@ interface CustomerReport {
   name: string;
   email: string;
   subscriptionPlan: string;
-  status: 'active' | 'inactive' | 'suspended';
+  status: "active" | "inactive" | "suspended";
   joinDate: string;
   lastActive: string;
   totalStreams: number;
@@ -712,8 +713,8 @@ interface CustomerReportResponse {
 }
 
 interface ExportReportQuery {
-  type: 'pdf' | 'csv' | 'excel';
-  report: 'analytics' | 'customers' | 'revenue';
+  type: "pdf" | "csv" | "excel";
+  report: "analytics" | "customers" | "revenue";
   startDate: string;
   endDate: string;
 }
@@ -741,7 +742,7 @@ interface PaginationParams {
   page: number;
   pageSize: number;
   sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
+  sortOrder?: "asc" | "desc";
 }
 
 interface PaginatedResponse<T> {
@@ -764,7 +765,7 @@ interface FilterOptions {
   year?: string;
   status?: string;
   sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
+  sortOrder?: "asc" | "desc";
 }
 
 // Firebase file upload with progress
@@ -797,7 +798,7 @@ interface StatsCard {
   value: string | number;
   icon: string;
   change?: number; // Percentage change
-  trend?: 'up' | 'down';
+  trend?: "up" | "down";
 }
 ```
 
@@ -848,8 +849,8 @@ const musicValidationRules: ValidationRules = {
     required: true,
     pattern: /^https:\/\/firebasestorage\.googleapis\.com\/.+/,
     custom: (url: string) => {
-      if (!url.startsWith('https://firebasestorage.googleapis.com/')) {
-        return 'Invalid Firebase Storage URL';
+      if (!url.startsWith("https://firebasestorage.googleapis.com/")) {
+        return "Invalid Firebase Storage URL";
       }
       return true;
     },
@@ -857,33 +858,36 @@ const musicValidationRules: ValidationRules = {
 };
 
 // File validation (before upload to Firebase)
-const validateFile = (file: File, type: 'audio' | 'image' | 'video'): string | true => {
+const validateFile = (
+  file: File,
+  type: "audio" | "image" | "video",
+): string | true => {
   const validations = {
     audio: {
-      types: ['audio/mpeg', 'audio/wav', 'audio/flac', 'audio/aac'],
+      types: ["audio/mpeg", "audio/wav", "audio/flac", "audio/aac"],
       maxSize: 50 * 1024 * 1024, // 50MB
     },
     image: {
-      types: ['image/jpeg', 'image/png', 'image/webp'],
+      types: ["image/jpeg", "image/png", "image/webp"],
       maxSize: 5 * 1024 * 1024, // 5MB
     },
     video: {
-      types: ['video/mp4', 'video/webm'],
+      types: ["video/mp4", "video/webm"],
       maxSize: 500 * 1024 * 1024, // 500MB
     },
   };
-  
+
   const validation = validations[type];
-  
+
   if (!validation.types.includes(file.type)) {
-    return `Invalid file type. Allowed: ${validation.types.join(', ')}`;
+    return `Invalid file type. Allowed: ${validation.types.join(", ")}`;
   }
-  
+
   if (file.size > validation.maxSize) {
     const sizeMB = Math.round(validation.maxSize / (1024 * 1024));
     return `File size exceeds ${sizeMB}MB limit.`;
   }
-  
+
   return true;
 };
 ```
@@ -911,10 +915,10 @@ type PaginatedRequest<T> = T & PaginationParams;
 type FilteredRequest<T> = T & FilterOptions;
 
 // Omit timestamps from type
-type WithoutTimestamps<T> = Omit<T, 'createdAt' | 'updatedAt'>;
+type WithoutTimestamps<T> = Omit<T, "createdAt" | "updatedAt">;
 
 // Extract IDs only
-type IdOnly<T extends { id: number }> = Pick<T, 'id'>;
+type IdOnly<T extends { id: number }> = Pick<T, "id">;
 
 // Make all nested properties optional
 type DeepPartial<T> = {
@@ -964,24 +968,24 @@ interface EnvironmentVariables {
   // API
   NEXT_PUBLIC_API_URL: string;
   NEXT_PUBLIC_WS_URL: string;
-  
+
   // Storage
   NEXT_PUBLIC_STORAGE_URL: string;
   NEXT_PUBLIC_CDN_URL: string;
-  
+
   // Auth
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string;
-  
+
   // External Services
   STRIPE_PUBLIC_KEY: string;
   STRIPE_SECRET_KEY: string;
-  
+
   // Analytics
   GOOGLE_ANALYTICS_ID: string;
-  
+
   // Other
-  NODE_ENV: 'development' | 'production' | 'test';
+  NODE_ENV: "development" | "production" | "test";
 }
 
 declare global {
@@ -998,33 +1002,34 @@ declare global {
 ### Create Music with Firebase Storage
 
 ```typescript
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { storage } from "@/lib/firebase";
 
 // Upload file to Firebase Storage
 const uploadToFirebase = async (
   file: File,
   path: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
 ): Promise<string> => {
   const timestamp = Date.now();
   const filename = `${timestamp}_${file.name}`;
   const storageRef = ref(storage, `${path}/${filename}`);
-  
+
   return new Promise((resolve, reject) => {
     const uploadTask = uploadBytesResumable(storageRef, file);
-    
+
     uploadTask.on(
-      'state_changed',
+      "state_changed",
       (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        const progress =
+          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         onProgress?.(progress);
       },
       (error) => reject(error),
       async () => {
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         resolve(downloadURL);
-      }
+      },
     );
   });
 };
@@ -1036,47 +1041,44 @@ const createMusic = async (
     audioFile: File;
     coverImage?: File;
   },
-  onUploadProgress?: (progress: number) => void
+  onUploadProgress?: (progress: number) => void,
 ) => {
   try {
     // 1. Upload audio file to Firebase
     const audioFileUrl = await uploadToFirebase(
       files.audioFile,
-      'audio',
-      onUploadProgress
+      "audio",
+      onUploadProgress,
     );
-    
+
     // 2. Upload cover image if provided
     let coverImageUrl: string | undefined;
     if (files.coverImage) {
-      coverImageUrl = await uploadToFirebase(
-        files.coverImage,
-        'images/covers'
-      );
+      coverImageUrl = await uploadToFirebase(files.coverImage, "images/covers");
     }
-    
+
     // 3. Create payload with Firebase URLs
     const payload: CreateMusicRequest = {
       ...data,
       artistId: Number(data.artist), // Convert to artistId
-      explicit: data.explicit === 'true',
+      explicit: data.explicit === "true",
       audioFileUrl,
       coverImageUrl,
     };
-    
+
     // 4. Send to API
-    const response = await fetch('/api/music', {
-      method: 'POST',
+    const response = await fetch("/api/music", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
     });
-    
-    return await response.json() as ApiResponse<Music>;
+
+    return (await response.json()) as ApiResponse<Music>;
   } catch (error) {
-    console.error('Upload failed:', error);
+    console.error("Upload failed:", error);
     throw error;
   }
 };
@@ -1087,21 +1089,21 @@ const createMusic = async (
 ```typescript
 const fetchMusicList = async (
   filters: FilterOptions,
-  pagination: PaginationParams
+  pagination: PaginationParams,
 ): Promise<PaginatedResponse<Music>> => {
   const queryParams = new URLSearchParams({
     ...filters,
     page: pagination.page.toString(),
     pageSize: pagination.pageSize.toString(),
   });
-  
+
   const response = await fetch(`/api/music?${queryParams}`, {
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
   });
-  
+
   return await response.json();
 };
 ```
@@ -1120,7 +1122,7 @@ interface MusicFormInputs extends MusicFormData {
 const MusicForm: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  
+
   const { register, handleSubmit, formState: { errors } } = useForm<MusicFormInputs>({
     defaultValues: {
       title: '',
@@ -1130,16 +1132,16 @@ const MusicForm: React.FC = () => {
       // ... other fields
     },
   });
-  
+
   const onSubmit = async (data: MusicFormInputs) => {
     if (!data.audioFile?.[0]) {
       alert('Please select an audio file');
       return;
     }
-    
+
     setUploading(true);
     setUploadProgress(0);
-    
+
     try {
       // Upload to Firebase and create music
       await createMusic(
@@ -1150,7 +1152,7 @@ const MusicForm: React.FC = () => {
         },
         (progress) => setUploadProgress(progress)
       );
-      
+
       alert('Music uploaded successfully!');
     } catch (error) {
       console.error('Upload failed:', error);
@@ -1159,32 +1161,32 @@ const MusicForm: React.FC = () => {
       setUploading(false);
     }
   };
-  
+
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <input {...register('title', { required: true })} />
       <input {...register('artist', { required: true })} />
       <input {...register('genre', { required: true })} />
-      
-      <input 
-        type="file" 
+
+      <input
+        type="file"
         accept="audio/*"
-        {...register('audioFile', { required: true })} 
+        {...register('audioFile', { required: true })}
       />
-      
-      <input 
-        type="file" 
+
+      <input
+        type="file"
         accept="image/*"
-        {...register('coverImage')} 
+        {...register('coverImage')}
       />
-      
+
       {uploading && (
         <div>
           <p>Uploading: {uploadProgress.toFixed(0)}%</p>
           <progress value={uploadProgress} max={100} />
         </div>
       )}
-      
+
       <button type="submit" disabled={uploading}>
         {uploading ? 'Uploading...' : 'Upload Music'}
       </button>
@@ -1200,34 +1202,35 @@ const MusicForm: React.FC = () => {
 ### Complete Upload Utilities
 
 ```typescript
-import { 
-  ref, 
-  uploadBytesResumable, 
-  getDownloadURL, 
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
   deleteObject,
-  UploadTask 
-} from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+  UploadTask,
+} from "firebase/storage";
+import { storage } from "@/lib/firebase";
 
 // Upload file with progress tracking
 export const uploadFile = async (
   file: File,
   path: string,
   onProgress?: (progress: number) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
 ): Promise<string> => {
   const timestamp = Date.now();
-  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
   const filename = `${timestamp}_${sanitizedFilename}`;
   const storageRef = ref(storage, `${path}/${filename}`);
-  
+
   return new Promise((resolve, reject) => {
     const uploadTask = uploadBytesResumable(storageRef, file);
-    
+
     uploadTask.on(
-      'state_changed',
+      "state_changed",
       (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        const progress =
+          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         onProgress?.(progress);
       },
       (error) => {
@@ -1241,7 +1244,7 @@ export const uploadFile = async (
         } catch (error) {
           reject(error);
         }
-      }
+      },
     );
   });
 };
@@ -1252,7 +1255,7 @@ export const deleteFile = async (fileUrl: string): Promise<void> => {
     const fileRef = ref(storage, fileUrl);
     await deleteObject(fileRef);
   } catch (error) {
-    console.error('Error deleting file:', error);
+    console.error("Error deleting file:", error);
     throw error;
   }
 };
@@ -1261,16 +1264,12 @@ export const deleteFile = async (fileUrl: string): Promise<void> => {
 export const uploadMultipleFiles = async (
   files: File[],
   path: string,
-  onProgress?: (fileIndex: number, progress: number) => void
+  onProgress?: (fileIndex: number, progress: number) => void,
 ): Promise<string[]> => {
   const uploadPromises = files.map((file, index) =>
-    uploadFile(
-      file,
-      path,
-      (progress) => onProgress?.(index, progress)
-    )
+    uploadFile(file, path, (progress) => onProgress?.(index, progress)),
   );
-  
+
   return Promise.all(uploadPromises);
 };
 
@@ -1290,24 +1289,24 @@ export const validateFileForUpload = (
   options: {
     maxSize?: number;
     allowedTypes?: string[];
-  }
+  },
 ): { valid: boolean; error?: string } => {
   const { maxSize = 50 * 1024 * 1024, allowedTypes } = options;
-  
+
   if (file.size > maxSize) {
     return {
       valid: false,
       error: `File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds limit (${(maxSize / (1024 * 1024)).toFixed(0)}MB)`,
     };
   }
-  
+
   if (allowedTypes && !allowedTypes.includes(file.type)) {
     return {
       valid: false,
-      error: `File type ${file.type} is not allowed. Allowed types: ${allowedTypes.join(', ')}`,
+      error: `File type ${file.type} is not allowed. Allowed types: ${allowedTypes.join(", ")}`,
     };
   }
-  
+
   return { valid: true };
 };
 ```
@@ -1339,25 +1338,25 @@ export const useFileUpload = (options: UseFileUploadOptions): UseFileUploadRetur
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<Error | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-  
+
   const upload = useCallback(async (file: File): Promise<string | null> => {
     // Validate file
     const validation = validateFileForUpload(file, {
       maxSize: options.maxSize,
       allowedTypes: options.allowedTypes,
     });
-    
+
     if (!validation.valid) {
       const err = new Error(validation.error);
       setError(err);
       options.onError?.(err);
       return null;
     }
-    
+
     setUploading(true);
     setProgress(0);
     setError(null);
-    
+
     try {
       const downloadUrl = await uploadFile(
         file,
@@ -1365,7 +1364,7 @@ export const useFileUpload = (options: UseFileUploadOptions): UseFileUploadRetur
         setProgress,
         setError
       );
-      
+
       setUrl(downloadUrl);
       options.onSuccess?.(downloadUrl);
       return downloadUrl;
@@ -1378,14 +1377,14 @@ export const useFileUpload = (options: UseFileUploadOptions): UseFileUploadRetur
       setUploading(false);
     }
   }, [options]);
-  
+
   const reset = useCallback(() => {
     setUploading(false);
     setProgress(0);
     setError(null);
     setUrl(null);
   }, []);
-  
+
   return { upload, uploading, progress, error, url, reset };
 };
 
@@ -1398,14 +1397,14 @@ const MusicUploadComponent = () => {
     onSuccess: (url) => console.log('Audio uploaded:', url),
     onError: (error) => console.error('Upload failed:', error),
   });
-  
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       await audioUpload.upload(file);
     }
   };
-  
+
   return (
     <div>
       <input type="file" accept="audio/*" onChange={handleFileSelect} />
@@ -1427,4 +1426,3 @@ const MusicUploadComponent = () => {
 **Last Updated:** 2024-01-15  
 **TypeScript Version:** 5.0+  
 **Firebase Storage:** v10+
-

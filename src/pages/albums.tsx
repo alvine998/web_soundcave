@@ -26,6 +26,7 @@ interface Album {
   genre: string;
   total_tracks: number;
   record_label: string | null;
+  cover_image_url: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -62,6 +63,12 @@ export default function Albums() {
   const [genres, setGenres] = useState<Array<{ id: number; name: string }>>([]);
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
   const [isLoadingGenres, setIsLoadingGenres] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(
+    null
+  );
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
 
   // Helper function untuk mendapatkan token dari localStorage
   const getAuthToken = (): string | null => {
@@ -129,6 +136,7 @@ export default function Albums() {
         genre: string;
         total_tracks: number;
         record_label: string | null;
+        cover_image_url?: string | null;
         created_at?: string;
         updated_at?: string;
         deleted_at?: string | null;
@@ -146,6 +154,7 @@ export default function Albums() {
         genre: item.genre,
         total_tracks: item.total_tracks,
         record_label: item.record_label,
+        cover_image_url: item.cover_image_url || null,
         created_at: item.created_at
           ? item.created_at.split("T")[0]
           : new Date().toISOString().split("T")[0],
@@ -260,6 +269,64 @@ export default function Albums() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, filterArtist]);
 
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setCoverImage(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload image immediately
+      await uploadImage(file);
+    }
+  };
+
+  const uploadImage = async (file: File) => {
+    try {
+      setIsUploadingImage(true);
+      const token = getAuthToken();
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "albums/covers");
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/images/upload`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        const imageUrl = response.data.data.file_url;
+        setCoverImageUrl(imageUrl);
+        toast.success(response.data?.message || "Image uploaded successfully");
+      } else {
+        throw new Error(response.data?.message || "Failed to upload image");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "Failed to upload image. Please try again.";
+      error("Failed to Upload Image", msg);
+      toast.error(msg);
+      setCoverImage(null);
+      setCoverImagePreview(null);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
   const handleAddClick = () => {
     setFormData({
       title: "",
@@ -271,6 +338,9 @@ export default function Albums() {
       total_tracks: "",
       record_label: "",
     });
+    setCoverImage(null);
+    setCoverImagePreview(null);
+    setCoverImageUrl(null);
     setIsAddModalOpen(true);
   };
 
@@ -286,6 +356,9 @@ export default function Albums() {
       total_tracks: album.total_tracks.toString(),
       record_label: album.record_label || "",
     });
+    setCoverImage(null);
+    setCoverImagePreview(album.cover_image_url);
+    setCoverImageUrl(album.cover_image_url);
     setIsEditModalOpen(true);
   };
 
@@ -313,6 +386,10 @@ export default function Albums() {
 
       if (formData.record_label) {
         payload.record_label = formData.record_label;
+      }
+
+      if (coverImageUrl) {
+        payload.cover_image_url = coverImageUrl;
       }
 
       const response = await axios.post(
@@ -379,6 +456,10 @@ export default function Albums() {
 
       if (formData.record_label) {
         payload.record_label = formData.record_label;
+      }
+
+      if (coverImageUrl) {
+        payload.cover_image_url = coverImageUrl;
       }
 
       const response = await axios.put(
@@ -608,8 +689,16 @@ export default function Albums() {
                         >
                           <td className="py-4 px-6">
                             <div className="flex items-center space-x-3">
-                              <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center shrink-0">
-                                <span className="text-xl">💿</span>
+                              <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center shrink-0 overflow-hidden">
+                                {album.cover_image_url ? (
+                                  <img
+                                    src={album.cover_image_url}
+                                    alt={album.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-xl">💿</span>
+                                )}
                               </div>
                               <div>
                                 <p className="text-sm font-medium text-gray-900">
@@ -690,6 +779,58 @@ export default function Albums() {
                 Tambahkan album baru ke platform Anda
               </DialogDescription>
             </DialogHeader>
+
+            <div className="my-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Cover Image <span className="text-red-500">*</span>
+              </label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                  id="add-image-upload"
+                  disabled={isUploadingImage}
+                />
+                <label
+                  htmlFor="add-image-upload"
+                  className={`cursor-pointer ${isUploadingImage ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                >
+                  {coverImagePreview ? (
+                    <div className="space-y-2">
+                      <img
+                        src={coverImagePreview}
+                        alt="Preview"
+                        className="mx-auto h-32 w-32 object-cover rounded-lg"
+                      />
+                      <p className="text-sm text-gray-900 font-medium">
+                        {coverImage?.name || "Existing Cover"}
+                      </p>
+                      {isUploadingImage && (
+                        <p className="text-xs text-blue-600">Uploading...</p>
+                      )}
+                      {coverImageUrl && !isUploadingImage && (
+                        <p className="text-xs text-green-600">
+                          ✓ Uploaded successfully
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-4xl mb-2">🖼️</div>
+                      <p className="text-sm text-gray-600">
+                        Click to upload cover image
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        JPG, PNG up to 5MB
+                      </p>
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
               <div>
@@ -870,6 +1011,58 @@ export default function Albums() {
               <DialogTitle>Edit Album</DialogTitle>
               <DialogDescription>Update informasi album</DialogDescription>
             </DialogHeader>
+
+            <div className="my-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Cover Image
+              </label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                  id="edit-image-upload"
+                  disabled={isUploadingImage}
+                />
+                <label
+                  htmlFor="edit-image-upload"
+                  className={`cursor-pointer ${isUploadingImage ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                >
+                  {coverImagePreview ? (
+                    <div className="space-y-2">
+                      <img
+                        src={coverImagePreview}
+                        alt="Preview"
+                        className="mx-auto h-32 w-32 object-cover rounded-lg"
+                      />
+                      <p className="text-sm text-gray-900 font-medium">
+                        {coverImage?.name || "Existing Cover"}
+                      </p>
+                      {isUploadingImage && (
+                        <p className="text-xs text-blue-600">Uploading...</p>
+                      )}
+                      {coverImageUrl && !isUploadingImage && (
+                        <p className="text-xs text-green-600">
+                          ✓ Uploaded successfully
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-4xl mb-2">🖼️</div>
+                      <p className="text-sm text-gray-600">
+                        Click to upload cover image
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        JPG, PNG up to 5MB
+                      </p>
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
               <div>

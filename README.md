@@ -38,3 +38,19 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+
+## Deployment
+
+This project uses GitHub Actions for CI/CD. The deployment is performed via SSH to the remote server.
+
+### Required GitHub Secrets
+
+To enable deployment, the following secrets must be configured in your GitHub repository (**Settings > Secrets and variables > Actions**):
+
+| Secret Name       | Description                                                      |
+| :---------------- | :--------------------------------------------------------------- |
+| `SSH_PRIVATE_KEY` | Your SSH private key for authentication.                         |
+| `REMOTE_HOST`     | The IP address or hostname of your production server.            |
+| `REMOTE_USER`     | The SSH username used for deployment.                            |
+| `DEPLOY_PATH`     | The destination path on the server where the project is located. |
+| `REMOTE_PORT`     | (Optional) The SSH port, defaults to `22`.                       |
