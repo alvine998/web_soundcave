@@ -26,7 +26,7 @@ interface Album {
   genre: string;
   total_tracks: number;
   record_label: string | null;
-  cover_image_url: string | null;
+  image: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -137,7 +137,7 @@ export default function Albums() {
         genre: string;
         total_tracks: number;
         record_label: string | null;
-        cover_image_url?: string | null;
+        image?: string | null;
         created_at?: string;
         updated_at?: string;
         deleted_at?: string | null;
@@ -155,7 +155,7 @@ export default function Albums() {
         genre: item.genre,
         total_tracks: item.total_tracks,
         record_label: item.record_label,
-        cover_image_url: item.cover_image_url || null,
+        image: item.image || null,
         created_at: item.created_at
           ? item.created_at.split("T")[0]
           : new Date().toISOString().split("T")[0],
@@ -358,8 +358,8 @@ export default function Albums() {
       record_label: album.record_label || "",
     });
     setCoverImage(null);
-    setCoverImagePreview(album.cover_image_url);
-    setCoverImageUrl(album.cover_image_url);
+    setCoverImagePreview(album.image);
+    setCoverImageUrl(album.image);
     setIsEditModalOpen(true);
   };
 
@@ -464,7 +464,7 @@ export default function Albums() {
       }
 
       if (coverImageUrl) {
-        payload.cover_image_url = coverImageUrl;
+        payload.image = coverImageUrl;
       }
 
       const response = await axios.put(
@@ -695,9 +695,9 @@ export default function Albums() {
                           <td className="py-4 px-6">
                             <div className="flex items-center space-x-3">
                               <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center shrink-0 overflow-hidden">
-                                {album.cover_image_url ? (
+                                {album.image ? (
                                   <img
-                                    src={album.cover_image_url}
+                                    src={album.image}
                                     alt={album.title}
                                     className="w-full h-full object-cover"
                                   />
