@@ -58,4 +58,6 @@ jobs:
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
             git pull origin main
-            docker-compose up -d --build
+            docker compose down
+            docker compose up -d --build
+            docker compose ps
