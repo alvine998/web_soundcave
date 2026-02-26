@@ -28,7 +28,7 @@ export default function Layout({ children }: LayoutProps) {
       // Skip check for login page
       return;
     }
-    
+
     const token = getAuthToken();
     if (!token) {
       // No token found, redirect to login
@@ -109,10 +109,10 @@ export default function Layout({ children }: LayoutProps) {
   ];
 
   const handleLogout = () => {
-    // Remove token and user data from localStorage
+    // Clear all session/localStorage data
     if (typeof window !== "undefined") {
-      localStorage.removeItem("soundcave_token");
-      localStorage.removeItem("soundcave_user");
+      localStorage.clear();
+      sessionStorage.clear();
     }
     // Redirect to login page
     router.push("/");
@@ -122,9 +122,8 @@ export default function Layout({ children }: LayoutProps) {
     <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${
-          isSidebarOpen ? "w-64" : "w-20"
-        }`}
+        className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${isSidebarOpen ? "w-64" : "w-20"
+          }`}
       >
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
@@ -149,11 +148,10 @@ export default function Layout({ children }: LayoutProps) {
             <button
               key={item.path}
               onClick={() => router.push(item.path)}
-              className={`w-full flex items-center px-6 py-3 text-left transition-colors ${
-                router.pathname === item.path
+              className={`w-full flex items-center px-6 py-3 text-left transition-colors ${router.pathname === item.path
                   ? "bg-blue-50 text-blue-600 border-r-4 border-blue-600"
                   : "text-gray-700 hover:bg-gray-50"
-              }`}
+                }`}
             >
               <span className="text-xl">{item.icon}</span>
               {isSidebarOpen && (
@@ -166,9 +164,8 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <div
-        className={`transition-all duration-300 ${
-          isSidebarOpen ? "ml-64" : "ml-20"
-        }`}
+        className={`transition-all duration-300 ${isSidebarOpen ? "ml-64" : "ml-20"
+          }`}
       >
         {/* Topbar */}
         <header
@@ -269,22 +266,20 @@ export default function Layout({ children }: LayoutProps) {
                       {recentNotifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors ${
-                            !notification.isRead ? "bg-blue-50" : ""
-                          }`}
+                          className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors ${!notification.isRead ? "bg-blue-50" : ""
+                            }`}
                         >
                           <div className="flex items-start space-x-3">
                             {/* Icon */}
                             <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                                notification.type === "success"
+                              className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${notification.type === "success"
                                   ? "bg-green-100 text-green-600"
                                   : notification.type === "warning"
-                                  ? "bg-yellow-100 text-yellow-600"
-                                  : notification.type === "error"
-                                  ? "bg-red-100 text-red-600"
-                                  : "bg-blue-100 text-blue-600"
-                              }`}
+                                    ? "bg-yellow-100 text-yellow-600"
+                                    : notification.type === "error"
+                                      ? "bg-red-100 text-red-600"
+                                      : "bg-blue-100 text-blue-600"
+                                }`}
                             >
                               {notification.type === "success" ? (
                                 <svg

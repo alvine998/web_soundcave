@@ -28,6 +28,8 @@ export default function MainSong() {
     const pageSize = 10;
     const [total, setTotal] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
+    const [artistId, setArtistId] = useState<number | null>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
 
     const getAuthHeaders = () => {
         const token = typeof window !== "undefined" ? localStorage.getItem("soundcave_token") : null;
@@ -37,8 +39,13 @@ export default function MainSong() {
     const fetchSongs = async (pageParam = 1) => {
         try {
             setIsLoading(true);
+            const params: any = { page: pageParam, limit: pageSize, search: searchQuery || "" };
+            if (artistId) {
+                params.artist_id = artistId;
+            }
+
             const response = await axios.get(`${CONFIG.API_URL}/api/musics`, {
-                params: { page: pageParam, limit: pageSize, search: searchQuery || "" },
+                params,
                 ...getAuthHeaders(),
             });
 
@@ -67,12 +74,53 @@ export default function MainSong() {
         }
     };
 
-    useEffect(() => { fetchSongs(1); }, []);
+    const handleDelete = async (id: number) => {
+        if (!confirm("Are you sure you want to delete this song?")) return;
+        try {
+            const response = await axios.delete(`${CONFIG.API_URL}/api/musics/${id}`, getAuthHeaders());
+            if (response.data?.success) {
+                toast.success("Song deleted successfully");
+                fetchSongs(page);
+            }
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || "Failed to delete song.");
+        }
+    };
+
     useEffect(() => {
-        const timeout = setTimeout(() => fetchSongs(1), 500);
+        const init = async () => {
+            const storedUser = localStorage.getItem("soundcave_user");
+            if (storedUser) {
+                const user = JSON.parse(storedUser);
+                if (user.role === "independent") {
+                    try {
+                        const response = await axios.get(`${CONFIG.API_URL}/api/artists`, {
+                            params: { ref_user_id: user.id },
+                            ...getAuthHeaders()
+                        });
+                        if (response.data?.success && response.data.data.length > 0) {
+                            setArtistId(response.data.data[0].id);
+                        }
+                    } catch (err) {
+                        console.error("Error fetching artist id", err);
+                    }
+                }
+            }
+            setIsInitialized(true);
+        };
+        init();
+    }, []);
+
+    useEffect(() => {
+        if (!isInitialized) return;
+
+        const timeout = setTimeout(() => {
+            fetchSongs(page);
+        }, 500);
+
         return () => clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery]);
+    }, [searchQuery, page, artistId, isInitialized]);
 
     const formatDuration = (dur: string) => {
         if (!dur || dur === "-") return "-";
@@ -180,8 +228,18 @@ export default function MainSong() {
                                                     <td className="py-4 px-6 text-sm text-gray-900 font-medium">{song.play_count.toLocaleString()}</td>
                                                     <td className="py-4 px-6 text-sm text-gray-900 font-medium">{song.like_count.toLocaleString()}</td>
                                                     <td className="py-4 px-6">
-                                                        <button className="text-blue-600 hover:text-blue-700 text-sm font-medium mr-3">Edit</button>
-                                                        <button className="text-red-600 hover:text-red-700 text-sm font-medium">Delete</button>
+                                                        <button
+                                                            onClick={() => router.push(`/main/song/edit/${song.id}`)}
+                                                            className="text-blue-600 hover:text-blue-700 text-sm font-medium mr-3"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(song.id)}
+                                                            className="text-red-600 hover:text-red-700 text-sm font-medium"
+                                                        >
+                                                            Delete
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}

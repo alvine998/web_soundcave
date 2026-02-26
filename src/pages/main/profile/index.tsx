@@ -10,7 +10,7 @@ export default function MainProfile() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState({
-        name: "",
+        full_name: "",
         email: "",
         phone: "",
         bio: "",
@@ -37,7 +37,7 @@ export default function MainProfile() {
                         const user = JSON.parse(storedUser);
                         setUserRole(user?.role || "");
                         setFormData({
-                            name: user?.name || "",
+                            full_name: user?.full_name || "",
                             email: user?.email || "",
                             phone: user?.phone || "",
                             bio: user?.bio || "",
@@ -50,12 +50,12 @@ export default function MainProfile() {
 
                 // Try to fetch from API
                 try {
-                    const response = await axios.get(`${CONFIG.API_URL}/api/auth/profile`, getAuthHeaders());
+                    const response = await axios.get(`${CONFIG.API_URL}/api/profile`, getAuthHeaders());
                     if (response.data?.success && response.data?.data) {
                         const profile = response.data.data;
                         setUserRole(profile.role || userRole);
                         setFormData({
-                            name: profile.name || "",
+                            full_name: profile.full_name || "",
                             email: profile.email || "",
                             phone: profile.phone || "",
                             bio: profile.bio || "",
@@ -88,8 +88,15 @@ export default function MainProfile() {
         setIsSaving(true);
 
         try {
+            const storedUser = localStorage.getItem("soundcave_user");
+            if (!storedUser) {
+                toast.error("User not found.");
+                return;
+            }
+            const user = JSON.parse(storedUser);
+
             const response = await axios.put(
-                `${CONFIG.API_URL}/api/auth/profile`,
+                `${CONFIG.API_URL}/api/users/${user.id}`,
                 formData,
                 getAuthHeaders()
             );
@@ -160,7 +167,7 @@ export default function MainProfile() {
                                             name="name"
                                             type="text"
                                             required
-                                            value={formData.name}
+                                            value={formData.full_name}
                                             onChange={handleChange}
                                         />
                                     </div>
@@ -192,22 +199,22 @@ export default function MainProfile() {
                                     </div>
                                     <div>
                                         <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
-                                            Country
+                                            Bio
                                         </label>
                                         <Input
-                                            id="country"
-                                            name="country"
+                                            id="bio"
+                                            name="bio"
                                             type="text"
-                                            value={formData.country}
+                                            value={formData.bio}
                                             onChange={handleChange}
-                                            placeholder="e.g. Indonesia"
+                                            placeholder="Write your bio..."
                                         />
                                     </div>
                                 </div>
                             </div>
 
                             {/* Additional Info */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            {/* <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h2>
 
                                 <div className="space-y-4">
@@ -258,7 +265,7 @@ export default function MainProfile() {
                                         />
                                     </div>
                                 </div>
-                            </div>
+                            </div> */}
 
                             {/* Save Button */}
                             <div className="flex justify-end">

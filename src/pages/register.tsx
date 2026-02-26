@@ -18,7 +18,7 @@ export default function Register() {
     const [error, setError] = useState("");
 
     const [formData, setFormData] = useState({
-        name: "",
+        full_name: "",
         email: "",
         password: "",
         confirmPassword: "",
@@ -74,7 +74,7 @@ export default function Register() {
 
         try {
             const payload: Record<string, any> = {
-                name: formData.name,
+                full_name: formData.full_name,
                 email: formData.email,
                 password: formData.password,
                 phone: formData.phone || undefined,
@@ -197,10 +197,10 @@ export default function Register() {
                                 </label>
                                 <Input
                                     id="name"
-                                    name="name"
+                                    name="full_name"
                                     type="text"
                                     required
-                                    value={formData.name}
+                                    value={formData.full_name}
                                     onChange={handleChange}
                                     placeholder={isArtist ? "Your artist name" : "Your label name"}
                                 />
@@ -217,10 +217,10 @@ export default function Register() {
                                     </label>
                                     <Input
                                         id="companyName"
-                                        name="companyName"
+                                        name="full_name"
                                         type="text"
                                         required
-                                        value={formData.name}
+                                        value={formData.full_name}
                                         onChange={handleChange}
                                         placeholder="Company / business entity name"
                                     />

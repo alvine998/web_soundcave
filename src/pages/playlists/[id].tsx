@@ -130,7 +130,7 @@ export default function PlaylistDetail() {
 
       if (response.data?.success && response.data?.data) {
         // Sort by position
-        const sortedSongs = response.data.data.sort((a: PlaylistSong, b: PlaylistSong) => 
+        const sortedSongs = response.data.data.sort((a: PlaylistSong, b: PlaylistSong) =>
           a.position - b.position
         );
         setSongs(sortedSongs);
@@ -162,6 +162,35 @@ export default function PlaylistDetail() {
         err?.response?.data?.error?.message ||
         'Failed to remove song from playlist.';
       error('Failed to Remove Song', msg);
+      toast.error(msg);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || typeof id !== 'string') return;
+
+    if (!confirm('Are you sure you want to delete this playlist? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await axios.delete(
+        `${CONFIG.API_URL}/api/playlists/${id}`,
+        getAuthHeaders()
+      );
+
+      if (response.data?.success) {
+        toast.success('Playlist deleted successfully');
+        router.push('/playlists');
+      } else {
+        throw new Error(response.data?.message || 'Failed to delete playlist');
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'Failed to delete playlist.';
+      error('Failed to Delete Playlist', msg);
       toast.error(msg);
     }
   };
@@ -236,6 +265,12 @@ export default function PlaylistDetail() {
               >
                 Edit
               </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
             </div>
           </div>
 
@@ -272,11 +307,10 @@ export default function PlaylistDetail() {
                     )}
                   </div>
                   <span
-                    className={`px-3 py-1 text-sm font-medium rounded ${
-                      playlist.is_public
+                    className={`px-3 py-1 text-sm font-medium rounded ${playlist.is_public
                         ? 'bg-green-100 text-green-700'
                         : 'bg-gray-100 text-gray-700'
-                    }`}
+                      }`}
                   >
                     {playlist.is_public ? 'Public' : 'Private'}
                   </span>

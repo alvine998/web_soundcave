@@ -8,55 +8,53 @@ import axios from "axios";
 import { CONFIG } from "@/config";
 import toast from "react-hot-toast";
 
-interface Album {
+interface Artist {
     id: number;
-    title: string;
-    artist_name: string;
-    release_date: string;
-    type: string;
-    cover_image?: string;
-    song_count: number;
+    name: string;
+    genre: string;
+    country: string;
+    profile_image?: string;
+    createdAt?: string;
 }
 
-export default function MainAlbum() {
+export default function MainArtistList() {
     const router = useRouter();
-    const [albums, setAlbums] = useState<Album[]>([]);
+    const [artists, setArtists] = useState<Artist[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [page, setPage] = useState(1);
     const pageSize = 10;
     const [total, setTotal] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
-    const [artistId, setArtistId] = useState<number | null>(null);
-    const [isInitialized, setIsInitialized] = useState(false);
 
     const getAuthHeaders = () => {
         const token = typeof window !== "undefined" ? localStorage.getItem("soundcave_token") : null;
         return { headers: { Authorization: token ? `Bearer ${token}` : "", "Content-Type": "application/json" } };
     };
 
-    const fetchAlbums = async (pageParam = 1) => {
+    const fetchArtists = async (pageParam = 1) => {
         try {
             setIsLoading(true);
-            const params: any = { page: pageParam, limit: pageSize, search: searchQuery || "" };
-            if (artistId) {
-                params.artist_id = artistId;
-            }
-
-            const response = await axios.get(`${CONFIG.API_URL}/api/albums`, {
-                params,
+            // Assuming there's an endpoint to fetch artists managed by the label
+            // Or we use the general artists endpoint and filter if needed
+            const response = await axios.get(`${CONFIG.API_URL}/api/artists`, {
+                params: {
+                    page: pageParam,
+                    limit: pageSize,
+                    search: searchQuery || "",
+                    // managed_by_me: true // Potential backend flag for label-specific artists
+                },
                 ...getAuthHeaders(),
             });
 
             if (response.data?.success) {
                 const items = response.data.data || [];
-                setAlbums(items.map((item: any) => ({
+                setArtists(items.map((item: any) => ({
                     id: item.id,
-                    title: item.title || item.name,
-                    artist_name: item.artist_name || item.artist?.name || "-",
-                    release_date: item.release_date ? item.release_date.split("T")[0] : "-",
-                    type: item.type || "album",
-                    cover_image: item.cover_image,
-                    song_count: item.song_count || 0,
+                    name: item.name,
+                    genre: item.genre || "-",
+                    country: item.country || "-",
+                    profile_image: item.profile_image,
+                    createdAt: item.created_at ? item.created_at.split("T")[0] : "-",
                 })));
 
                 const pagination = response.data.pagination || {};
@@ -64,88 +62,61 @@ export default function MainAlbum() {
                 setTotal(pagination.total || items.length);
             }
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || "Failed to load albums.");
+            toast.error(err?.response?.data?.message || "Failed to load artists.");
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Are you sure you want to delete this album?")) return;
-        try {
-            const response = await axios.delete(`${CONFIG.API_URL}/api/albums/${id}`, getAuthHeaders());
-            if (response.data?.success) {
-                toast.success("Album deleted successfully");
-                fetchAlbums(page);
-            }
-        } catch (err: any) {
-            toast.error(err?.response?.data?.message || "Failed to delete album.");
-        }
-    };
-
     useEffect(() => {
-        const init = async () => {
-            const storedUser = localStorage.getItem("soundcave_user");
-            if (storedUser) {
-                const user = JSON.parse(storedUser);
-                if (user.role === "independent") {
-                    try {
-                        const response = await axios.get(`${CONFIG.API_URL}/api/artists`, {
-                            params: { ref_user_id: user.id },
-                            ...getAuthHeaders()
-                        });
-                        if (response.data?.success && response.data.data.length > 0) {
-                            setArtistId(response.data.data[0].id);
-                        }
-                    } catch (err) {
-                        console.error("Error fetching artist id", err);
-                    }
-                }
-            }
-            setIsInitialized(true);
-        };
-        init();
+        fetchArtists(1);
     }, []);
 
     useEffect(() => {
-        if (!isInitialized) return;
-
-        const timeout = setTimeout(() => {
-            fetchAlbums(page);
-        }, 500);
-
+        const timeout = setTimeout(() => fetchArtists(1), 500);
         return () => clearTimeout(timeout);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery, page, artistId, isInitialized]);
+    }, [searchQuery]);
+
+    const handleDelete = async (id: number) => {
+        if (!confirm("Are you sure you want to delete this artist?")) return;
+
+        try {
+            const response = await axios.delete(`${CONFIG.API_URL}/api/artists/${id}`, getAuthHeaders());
+            if (response.data?.success) {
+                toast.success("Artist deleted successfully");
+                fetchArtists(page);
+            }
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || "Failed to delete artist.");
+        }
+    };
 
     return (
         <>
             <Head>
-                <title>Albums - SoundCave</title>
-                <meta name="description" content="Manage your albums" />
+                <title>Manage Artists - SoundCave</title>
             </Head>
 
             <MainLayout>
                 <div className="p-6">
                     <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">Albums</h1>
-                            <p className="text-gray-600">Manage and organize your album releases</p>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">Artists</h1>
+                            <p className="text-gray-600">Manage artists under your label</p>
                         </div>
                         <button
-                            onClick={() => router.push("/main/album/create")}
+                            onClick={() => router.push("/main/artist/create")}
                             className="mt-4 sm:mt-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                         >
-                            + Create Album
+                            + Add Artist
                         </button>
                     </div>
 
-                    {/* Search */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
                         <div className="relative max-w-md">
                             <Input
                                 type="text"
-                                placeholder="Search albums..."
+                                placeholder="Search artists..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-10"
@@ -156,22 +127,21 @@ export default function MainAlbum() {
                         </div>
                     </div>
 
-                    {/* Albums Table */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         {isLoading ? (
                             <div className="text-center py-12">
                                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                                <p className="mt-4 text-gray-600">Loading albums...</p>
+                                <p className="mt-4 text-gray-600">Loading artists...</p>
                             </div>
-                        ) : albums.length === 0 ? (
+                        ) : artists.length === 0 ? (
                             <div className="text-center py-12">
-                                <span className="text-6xl mb-4 block">💿</span>
-                                <p className="text-gray-600">No albums found</p>
+                                <span className="text-6xl mb-4 block">🎤</span>
+                                <p className="text-gray-600">No artists found</p>
                                 <button
-                                    onClick={() => router.push("/main/album/create")}
+                                    onClick={() => router.push("/main/artist/create")}
                                     className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                                 >
-                                    Create Your First Album
+                                    Add Your First Artist
                                 </button>
                             </div>
                         ) : (
@@ -180,47 +150,42 @@ export default function MainAlbum() {
                                     <table className="w-full">
                                         <thead className="bg-gray-50">
                                             <tr className="border-b border-gray-200">
-                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Album</th>
-                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Type</th>
-                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Songs</th>
-                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Release Date</th>
+                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Artist</th>
+                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Genre</th>
+                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Country</th>
+                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Joined At</th>
                                                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {albums.map((album) => (
-                                                <tr key={album.id} className="hover:bg-gray-50 transition-colors">
+                                            {artists.map((artist) => (
+                                                <tr key={artist.id} className="hover:bg-gray-50 transition-colors">
                                                     <td className="py-4 px-6">
                                                         <div className="flex items-center space-x-3">
-                                                            <div className="shrink-0 h-10 w-10 rounded overflow-hidden bg-gray-200 flex items-center justify-center">
-                                                                {album.cover_image ? (
-                                                                    <img src={album.cover_image} alt={album.title} className="h-full w-full object-cover" />
+                                                            <div className="shrink-0 h-10 w-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                                                                {artist.profile_image ? (
+                                                                    <img src={artist.profile_image} alt={artist.name} className="h-full w-full object-cover" />
                                                                 ) : (
-                                                                    <span className="text-xl">💿</span>
+                                                                    <span className="text-xl">🎤</span>
                                                                 )}
                                                             </div>
-                                                            <div>
-                                                                <p className="text-sm font-medium text-gray-900">{album.title}</p>
-                                                                <p className="text-xs text-gray-500">{album.artist_name}</p>
-                                                            </div>
+                                                            <p className="text-sm font-medium text-gray-900">{artist.name}</p>
                                                         </div>
                                                     </td>
                                                     <td className="py-4 px-6">
-                                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded capitalize">
-                                                            {album.type}
-                                                        </span>
+                                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">{artist.genre}</span>
                                                     </td>
-                                                    <td className="py-4 px-6 text-sm text-gray-900">{album.song_count}</td>
-                                                    <td className="py-4 px-6 text-sm text-gray-600">{album.release_date}</td>
+                                                    <td className="py-4 px-6 text-sm text-gray-700">{artist.country}</td>
+                                                    <td className="py-4 px-6 text-sm text-gray-600">{artist.createdAt}</td>
                                                     <td className="py-4 px-6">
                                                         <button
-                                                            onClick={() => router.push(`/main/album/edit/${album.id}`)}
+                                                            onClick={() => router.push(`/main/artist/edit/${artist.id}`)}
                                                             className="text-blue-600 hover:text-blue-700 text-sm font-medium mr-3"
                                                         >
                                                             Edit
                                                         </button>
                                                         <button
-                                                            onClick={() => handleDelete(album.id)}
+                                                            onClick={() => handleDelete(artist.id)}
                                                             className="text-red-600 hover:text-red-700 text-sm font-medium"
                                                         >
                                                             Delete
@@ -236,7 +201,7 @@ export default function MainAlbum() {
                                         total={total}
                                         page={page}
                                         pageSize={pageSize}
-                                        onPageChange={(nextPage) => { setPage(nextPage); fetchAlbums(nextPage); }}
+                                        onPageChange={(nextPage) => { setPage(nextPage); fetchArtists(nextPage); }}
                                     />
                                 )}
                             </>

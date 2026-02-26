@@ -26,6 +26,8 @@ export default function MainMusicVideo() {
     const pageSize = 10;
     const [total, setTotal] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
+    const [artistId, setArtistId] = useState<number | null>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
 
     const getAuthHeaders = () => {
         const token = typeof window !== "undefined" ? localStorage.getItem("soundcave_token") : null;
@@ -35,8 +37,13 @@ export default function MainMusicVideo() {
     const fetchVideos = async (pageParam = 1) => {
         try {
             setIsLoading(true);
+            const params: any = { page: pageParam, limit: pageSize, search: searchQuery || "" };
+            if (artistId) {
+                params.artist_id = artistId;
+            }
+
             const response = await axios.get(`${CONFIG.API_URL}/api/music-videos`, {
-                params: { page: pageParam, limit: pageSize, search: searchQuery || "" },
+                params,
                 ...getAuthHeaders(),
             });
 
@@ -63,12 +70,53 @@ export default function MainMusicVideo() {
         }
     };
 
-    useEffect(() => { fetchVideos(1); }, []);
+    const handleDelete = async (id: number) => {
+        if (!confirm("Are you sure you want to delete this music video?")) return;
+        try {
+            const response = await axios.delete(`${CONFIG.API_URL}/api/music-videos/${id}`, getAuthHeaders());
+            if (response.data?.success) {
+                toast.success("Music video deleted successfully");
+                fetchVideos(page);
+            }
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || "Failed to delete music video.");
+        }
+    };
+
     useEffect(() => {
-        const timeout = setTimeout(() => fetchVideos(1), 500);
+        const init = async () => {
+            const storedUser = localStorage.getItem("soundcave_user");
+            if (storedUser) {
+                const user = JSON.parse(storedUser);
+                if (user.role === "independent") {
+                    try {
+                        const response = await axios.get(`${CONFIG.API_URL}/api/artists`, {
+                            params: { ref_user_id: user.id },
+                            ...getAuthHeaders()
+                        });
+                        if (response.data?.success && response.data.data.length > 0) {
+                            setArtistId(response.data.data[0].id);
+                        }
+                    } catch (err) {
+                        console.error("Error fetching artist id", err);
+                    }
+                }
+            }
+            setIsInitialized(true);
+        };
+        init();
+    }, []);
+
+    useEffect(() => {
+        if (!isInitialized) return;
+
+        const timeout = setTimeout(() => {
+            fetchVideos(page);
+        }, 500);
+
         return () => clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery]);
+    }, [searchQuery, page, artistId, isInitialized]);
 
     return (
         <>
@@ -149,8 +197,18 @@ export default function MainMusicVideo() {
                                                     <span>{video.created_at}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-3">
-                                                    <button className="text-blue-600 hover:text-blue-700 text-xs font-medium">Edit</button>
-                                                    <button className="text-red-600 hover:text-red-700 text-xs font-medium">Delete</button>
+                                                    <button
+                                                        onClick={() => router.push(`/main/music-video/edit/${video.id}`)}
+                                                        className="text-blue-600 hover:text-blue-700 text-xs font-medium"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(video.id)}
+                                                        className="text-red-600 hover:text-red-700 text-xs font-medium"
+                                                    >
+                                                        Delete
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>

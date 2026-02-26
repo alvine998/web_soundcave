@@ -29,10 +29,13 @@ export default function Home() {
           try {
             const user = storedUser ? JSON.parse(storedUser) : null;
             const role = user?.role;
-            if (role === "artist" || role === "label") {
+            if (role === "independent" || role === "label") {
               router.push("/main/dashboard");
-            } else {
+            } else if (role === "admin") {
               router.push("/dashboard");
+            } else {
+              toast.error("You are not authorized to access this page.");
+              router.push("/");
             }
           } catch {
             router.push("/dashboard");
@@ -76,14 +79,17 @@ export default function Home() {
           localStorage.setItem("soundcave_user", JSON.stringify(user));
         }
 
-        toast.success(response.data.message || "Login berhasil. Selamat datang di SoundCave!");
-
         // Redirect based on role
         const role = user?.role;
-        if (role === "artist" || role === "label") {
+        if (role === "independent" || role === "label") {
+          toast.success(response.data.message || "Login berhasil. Selamat datang di SoundCave!");
           router.push("/main/dashboard");
-        } else {
+        } else if (role === "admin") {
+          toast.success(response.data.message || "Login berhasil. Selamat datang di SoundCave!");
           router.push("/dashboard");
+        } else {
+          toast.error("You are not authorized to access this page.");
+          router.push("/");
         }
       } else {
         const message =

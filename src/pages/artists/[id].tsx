@@ -66,6 +66,7 @@ export default function ArtistDetail() {
       youtube: '',
     },
   });
+  const [albums, setAlbums] = useState<any[]>([]);
 
   // Helper function untuk mendapatkan token dari localStorage
   const getAuthToken = (): string | null => {
@@ -141,7 +142,23 @@ export default function ArtistDetail() {
       }
     };
 
+    const fetchAlbums = async () => {
+      if (!id || typeof id !== 'string') return;
+      try {
+        const response = await axios.get(`${CONFIG.API_URL}/api/albums`, {
+          params: { artist_id: id },
+          ...getAuthHeaders(),
+        });
+        if (response.data?.success) {
+          setAlbums(response.data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch artist albums:", err);
+      }
+    };
+
     fetchArtist();
+    fetchAlbums();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -312,7 +329,7 @@ export default function ArtistDetail() {
 
                   {/* Top Songs */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Songs</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Popular Songs</h3>
                     <div className="space-y-4">
                       {topSongs.map((song, index) => (
                         <div
@@ -341,6 +358,43 @@ export default function ArtistDetail() {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Albums Section */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Albums</h3>
+                    {albums.length === 0 ? (
+                      <p className="text-gray-500 text-sm">No albums found for this artist.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {albums.map((album) => (
+                          <div key={album.id} className="group cursor-pointer">
+                            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-2 relative">
+                              {album.image ? (
+                                <img
+                                  src={album.image}
+                                  alt={album.title}
+                                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-400 text-3xl">
+                                  💿
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <button className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg">
+                                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            <h4 className="text-sm font-semibold text-gray-900 truncate">{album.title}</h4>
+                            <p className="text-xs text-gray-500">{album.release_date ? album.release_date.split('T')[0] : album.release_year || ''}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Biography */}

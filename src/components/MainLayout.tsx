@@ -26,7 +26,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             if (storedUser) {
                 try {
                     const user = JSON.parse(storedUser);
-                    setUserName(user?.name || "User");
+                    setUserName(user?.full_name || user?.name || "User");
                     setUserRole(user?.role || "");
                 } catch {
                     setUserName("User");
@@ -37,6 +37,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
     const menuItems = [
         { name: "Dashboard", path: "/main/dashboard", icon: "📊" },
+        ...(userRole === "label" ? [{ name: "Artists", path: "/main/artist", icon: "🎤" }] : []),
         { name: "Albums", path: "/main/album", icon: "💿" },
         { name: "Songs", path: "/main/song", icon: "🎵" },
         { name: "Music Videos", path: "/main/music-video", icon: "🎬" },
@@ -46,14 +47,14 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
     const handleLogout = () => {
         if (typeof window !== "undefined") {
-            localStorage.removeItem("soundcave_token");
-            localStorage.removeItem("soundcave_user");
+            localStorage.clear();
+            sessionStorage.clear();
         }
         router.push("/");
     };
 
     const roleLabel =
-        userRole === "artist"
+        userRole === "independent"
             ? "Independent Artist"
             : userRole === "label"
                 ? "Label"
@@ -86,9 +87,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 {/* Role Badge */}
                 {isSidebarOpen && (
                     <div className="px-6 py-3 border-b border-gray-100">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${userRole === "artist"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-purple-100 text-purple-700"
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${userRole === "independent"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-purple-100 text-purple-700"
                             }`}>
                             {roleLabel}
                         </span>
@@ -102,8 +103,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
                             key={item.path}
                             onClick={() => router.push(item.path)}
                             className={`w-full flex items-center px-6 py-3 text-left transition-colors ${router.pathname === item.path
-                                    ? "bg-blue-50 text-blue-600 border-r-4 border-blue-600"
-                                    : "text-gray-700 hover:bg-gray-50"
+                                ? "bg-blue-50 text-blue-600 border-r-4 border-blue-600"
+                                : "text-gray-700 hover:bg-gray-50"
                                 }`}
                         >
                             <span className="text-xl">{item.icon}</span>
@@ -170,7 +171,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
                                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                                     className="flex items-center space-x-3 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
                                 >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-medium ${userRole === "artist" ? "bg-blue-600" : "bg-purple-600"
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-medium ${userRole === "independent" ? "bg-blue-600" : "bg-purple-600"
                                         }`}>
                                         {userName.charAt(0).toUpperCase()}
                                     </div>
