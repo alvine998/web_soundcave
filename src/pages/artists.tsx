@@ -387,7 +387,7 @@ export default function Artists() {
                                 </div>
                                 {artist.bio && (
                                   <p className="text-xs text-gray-500 truncate mt-1">
-                                    {artist.bio}
+                                    {artist.bio?.length > 30 ? artist.bio?.slice(0, 30) + "..." : artist.bio}
                                   </p>
                                 )}
                               </div>

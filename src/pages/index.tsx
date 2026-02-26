@@ -24,8 +24,19 @@ export default function Home() {
       if (typeof window !== "undefined") {
         const token = localStorage.getItem("soundcave_token");
         if (token) {
-          // User is logged in, redirect to dashboard
-          router.push("/dashboard");
+          // User is logged in, redirect based on role
+          const storedUser = localStorage.getItem("soundcave_user");
+          try {
+            const user = storedUser ? JSON.parse(storedUser) : null;
+            const role = user?.role;
+            if (role === "artist" || role === "label") {
+              router.push("/main/dashboard");
+            } else {
+              router.push("/dashboard");
+            }
+          } catch {
+            router.push("/dashboard");
+          }
         } else {
           // User is not logged in, stay on login page
           setIsCheckingAuth(false);
@@ -66,7 +77,14 @@ export default function Home() {
         }
 
         toast.success(response.data.message || "Login berhasil. Selamat datang di SoundCave!");
-        router.push("/dashboard");
+
+        // Redirect based on role
+        const role = user?.role;
+        if (role === "artist" || role === "label") {
+          router.push("/main/dashboard");
+        } else {
+          router.push("/dashboard");
+        }
       } else {
         const message =
           response.data?.message ||
@@ -80,7 +98,7 @@ export default function Home() {
         err?.response?.data?.error?.message ||
         "Terjadi kesalahan saat login. Coba lagi.";
       setError(apiMessage);
-       toast.error(apiMessage);
+      toast.error(apiMessage);
     } finally {
       setIsLoading(false);
     }
@@ -247,6 +265,39 @@ export default function Home() {
                 )}
               </button>
             </form>
+          </div>
+
+          {/* Register Options */}
+          <div className="mt-6">
+            <div className="relative mb-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-3 bg-linear-to-br from-blue-50 to-white text-gray-500">
+                  or register as
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => router.push("/register?type=artist")}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-blue-200 text-blue-700 rounded-xl font-medium hover:bg-blue-50 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
+              >
+                <span className="text-xl">🎤</span>
+                Independent Artist
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/register?type=label")}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-purple-200 text-purple-700 rounded-xl font-medium hover:bg-purple-50 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all"
+              >
+                <span className="text-xl">🏢</span>
+                Label
+              </button>
+            </div>
           </div>
 
           {/* Footer */}

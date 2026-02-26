@@ -14,6 +14,7 @@ import {
 import axios from "axios";
 import { CONFIG } from "@/config";
 import { Pagination } from "@/components/Pagination";
+import toast from "react-hot-toast";
 
 interface Genre {
   id: number;
@@ -22,6 +23,7 @@ interface Genre {
   songCount: number;
   createdAt: string;
   color?: string;
+  background?: string;
 }
 
 export default function Genres() {
@@ -62,6 +64,73 @@ export default function Genres() {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Background image state
+  const [bgImageFile, setBgImageFile] = useState<File | null>(null);
+  const [bgImagePreview, setBgImagePreview] = useState<string | null>(null);
+  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const resetImageState = () => {
+    setBgImageFile(null);
+    setBgImagePreview(null);
+    setBgImageUrl(null);
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setBgImageFile(file);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBgImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload immediately
+      await uploadImage(file);
+    }
+  };
+
+  const uploadImage = async (file: File) => {
+    try {
+      setIsUploadingImage(true);
+      const token = getAuthToken();
+
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "genres/background");
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/images/upload`,
+        fd,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        setBgImageUrl(response.data.data.file_url);
+        toast.success("Image uploaded successfully");
+      } else {
+        throw new Error(response.data?.message || "Failed to upload image");
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        "Failed to upload image.";
+      toast.error(msg);
+      setBgImageFile(null);
+      setBgImagePreview(null);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
   const fetchGenres = async (pageParam = 1, query?: string) => {
     try {
       setIsLoading(true);
@@ -94,6 +163,7 @@ export default function Genres() {
         name: string;
         description: string;
         color?: string | null;
+        background?: string | null;
         created_at?: string;
         songCount?: number;
       }>;
@@ -103,7 +173,7 @@ export default function Genres() {
         name: item.name,
         description: item.description,
         color: item.color || undefined,
-        // backend tidak mengirim songCount, default 0 agar UI tetap jalan
+        background: item.background || undefined,
         songCount: typeof item.songCount === "number" ? item.songCount : 0,
         createdAt: item.created_at
           ? item.created_at.split("T")[0]
@@ -159,6 +229,7 @@ export default function Genres() {
 
   const handleAddClick = () => {
     setFormData({ name: "", description: "" });
+    resetImageState();
     setIsAddModalOpen(true);
   };
 
@@ -168,6 +239,15 @@ export default function Genres() {
       name: genre.name,
       description: genre.description,
     });
+    resetImageState();
+    if (genre.background) {
+      setBgImageUrl(genre.background);
+      setBgImagePreview(
+        genre.background.startsWith("http")
+          ? genre.background
+          : `${CONFIG.API_URL}${genre.background}`
+      );
+    }
     setIsEditModalOpen(true);
   };
 
@@ -179,12 +259,14 @@ export default function Genres() {
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         name: formData.name,
         description: formData.description,
-        // optional color, bisa dikembangkan nanti dari UI
-        color: undefined as string | undefined,
       };
+
+      if (bgImageUrl) {
+        payload.background = bgImageUrl;
+      }
 
       const response = await axios.post(
         `${CONFIG.API_URL}/api/genres`,
@@ -203,6 +285,7 @@ export default function Genres() {
       await fetchGenres(1, searchQuery.trim() ? searchQuery : undefined);
       setIsAddModalOpen(false);
       setFormData({ name: "", description: "" });
+      resetImageState();
       success(
         "Genre Added Successfully",
         `${payload.name} has been added to your genre list.`
@@ -221,11 +304,16 @@ export default function Genres() {
     if (!selectedGenre) return;
 
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         name: formData.name,
         description: formData.description,
         color: selectedGenre.color,
       };
+
+      // Include background image (updated or existing)
+      if (bgImageUrl) {
+        payload.background = bgImageUrl;
+      }
 
       const response = await axios.put(
         `${CONFIG.API_URL}/api/genres/${selectedGenre.id}`,
@@ -237,7 +325,7 @@ export default function Genres() {
         error(
           "Failed to Update Genre",
           response.data?.message ||
-            "An error occurred while updating the genre."
+          "An error occurred while updating the genre."
         );
         return;
       }
@@ -246,6 +334,7 @@ export default function Genres() {
       setIsEditModalOpen(false);
       setSelectedGenre(null);
       setFormData({ name: "", description: "" });
+      resetImageState();
       success(
         "Genre Updated Successfully",
         `${payload.name} has been updated.`
@@ -274,7 +363,7 @@ export default function Genres() {
         error(
           "Failed to Delete Genre",
           response.data?.message ||
-            "An error occurred while deleting the genre."
+          "An error occurred while deleting the genre."
         );
         return;
       }
@@ -499,6 +588,60 @@ export default function Genres() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 placeholder-gray-400"
                 />
               </div>
+              {/* Background Image Upload */}
+              <div>
+                <label
+                  htmlFor="add-bg-image"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Background Image
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    id="add-bg-image"
+                    disabled={isUploadingImage}
+                  />
+                  <label
+                    htmlFor="add-bg-image"
+                    className={`cursor-pointer ${isUploadingImage ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {bgImagePreview ? (
+                      <div className="space-y-2">
+                        <img
+                          src={bgImagePreview}
+                          alt="Preview"
+                          className="mx-auto h-24 w-full object-cover rounded-lg"
+                        />
+                        <p className="text-sm text-gray-900 font-medium">
+                          {bgImageFile?.name}
+                        </p>
+                        {isUploadingImage && (
+                          <p className="text-xs text-blue-600">Uploading...</p>
+                        )}
+                        {bgImageUrl && !isUploadingImage && (
+                          <p className="text-xs text-green-600">
+                            ✓ Uploaded successfully
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-3xl mb-1">🖼️</div>
+                        <p className="text-sm text-gray-600">
+                          Click to upload background image
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          JPG, PNG up to 5MB
+                        </p>
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
             </div>
 
             <DialogFooter>
@@ -567,6 +710,61 @@ export default function Genres() {
                   placeholder="Enter genre description..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 placeholder-gray-400"
                 />
+              </div>
+
+              {/* Background Image Upload */}
+              <div>
+                <label
+                  htmlFor="edit-bg-image"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Background Image
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    id="edit-bg-image"
+                    disabled={isUploadingImage}
+                  />
+                  <label
+                    htmlFor="edit-bg-image"
+                    className={`cursor-pointer ${isUploadingImage ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {bgImagePreview ? (
+                      <div className="space-y-2">
+                        <img
+                          src={bgImagePreview}
+                          alt="Preview"
+                          className="mx-auto h-24 w-full object-cover rounded-lg"
+                        />
+                        <p className="text-sm text-gray-900 font-medium">
+                          {bgImageFile?.name || "Current image"}
+                        </p>
+                        {isUploadingImage && (
+                          <p className="text-xs text-blue-600">Uploading...</p>
+                        )}
+                        {bgImageUrl && !isUploadingImage && (
+                          <p className="text-xs text-green-600">
+                            ✓ Image ready
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-3xl mb-1">🖼️</div>
+                        <p className="text-sm text-gray-600">
+                          Click to upload background image
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          JPG, PNG up to 5MB
+                        </p>
+                      </>
+                    )}
+                  </label>
+                </div>
               </div>
             </div>
 
