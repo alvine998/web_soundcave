@@ -13,6 +13,7 @@ export default function MainMusicVideoCreate() {
     const [isUploadingVideo, setIsUploadingVideo] = useState(false);
     const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
     const [userRole, setUserRole] = useState("");
+    const [adminUserId, setAdminUserId] = useState<number | null>(null);
 
     const [formData, setFormData] = useState({
         title: "",
@@ -20,6 +21,10 @@ export default function MainMusicVideoCreate() {
         genre: "",
         duration: "",
         description: "",
+        is_highlight: 0,
+        is_approved: 0,
+        approved_by: null as number | null,
+        release_date: "",
     });
 
     const [videoFileUrl, setVideoFileUrl] = useState<string | null>(null);
@@ -30,8 +35,11 @@ export default function MainMusicVideoCreate() {
     const [genres, setGenres] = useState<any[]>([]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const { name, value, type } = e.target as HTMLInputElement;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? ((e.target as HTMLInputElement).checked ? 1 : 0) : value
+        }));
     };
 
     const getAuthHeaders = () => {
@@ -44,6 +52,9 @@ export default function MainMusicVideoCreate() {
         if (storedUser) {
             const user = JSON.parse(storedUser);
             setUserRole(user.role);
+            if (user.role === "admin") {
+                setAdminUserId(user.id);
+            }
 
             if (user.role === "independent") {
                 fetchMyArtistId(user.id);
@@ -162,6 +173,11 @@ export default function MainMusicVideoCreate() {
             video_url: videoFileUrl,
             thumbnail_url: thumbnailUrl,
             thumbnail: thumbnailUrl, // Consistency
+            is_highlight: formData.is_highlight,
+            is_approved: formData.is_approved,
+            approved_by: formData.is_approved === 1 ? adminUserId : null,
+            release_date: formData.release_date,
+            submitted_by: userRole,
         };
 
         try {
@@ -187,21 +203,21 @@ export default function MainMusicVideoCreate() {
                     <h1 className="text-3xl font-bold mb-6">Upload Music Video</h1>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="bg-white p-6 rounded-xl border shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Video File *</label>
-                                <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                                <label className="block text-sm font-medium mb-1 text-gray-900">Video File *</label>
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center bg-gray-50/50">
                                     <input type="file" accept="video/*" onChange={handleVideoChange} className="hidden" id="video-input" />
-                                    <label htmlFor="video-input" className="cursor-pointer">
+                                    <label htmlFor="video-input" className="cursor-pointer text-gray-700 font-medium">
                                         {isUploadingVideo ? "Uploading..." : videoFileUrl ? "Video Uploaded ✓" : "Click to select video"}
                                     </label>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Thumbnail</label>
-                                <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                                <label className="block text-sm font-medium mb-1 text-gray-900">Thumbnail</label>
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center bg-gray-50/50">
                                     <input type="file" accept="image/*" onChange={handleThumbnailChange} className="hidden" id="thumb-input" />
-                                    <label htmlFor="thumb-input" className="cursor-pointer flex flex-col items-center">
+                                    <label htmlFor="thumb-input" className="cursor-pointer flex flex-col items-center text-gray-700 font-medium">
                                         {thumbnailPreview && <img src={thumbnailPreview} className="h-20 w-32 object-cover mb-2" />}
                                         {isUploadingThumbnail ? "Uploading..." : "Select thumbnail"}
                                     </label>
@@ -209,15 +225,15 @@ export default function MainMusicVideoCreate() {
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-medium mb-1">Video Title *</label>
+                                <label className="block text-sm font-medium mb-1 text-gray-900">Video Title *</label>
                                 <Input required name="title" value={formData.title} onChange={handleChange} placeholder="Video title" />
                             </div>
 
                             {userRole === "label" && (
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Artist *</label>
+                                    <label className="block text-sm font-medium mb-1 text-gray-900">Artist *</label>
                                     <select
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-gray-300 rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
                                         required
                                         name="artist_id"
                                         value={formData.artist_id}
@@ -230,9 +246,9 @@ export default function MainMusicVideoCreate() {
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Genre *</label>
+                                <label className="block text-sm font-medium mb-1 text-gray-900">Genre *</label>
                                 <select
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full border border-gray-300 rounded-lg p-2 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
                                     required
                                     name="genre"
                                     value={formData.genre}
@@ -244,20 +260,55 @@ export default function MainMusicVideoCreate() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Duration (e.g. 4:20)</label>
+                                <label className="block text-sm font-medium mb-1 text-gray-900">Duration (e.g. 4:20)</label>
                                 <Input name="duration" value={formData.duration} onChange={handleChange} placeholder="4:20" />
                             </div>
 
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-900">Release Date</label>
+                                <Input type="date" name="release_date" value={formData.release_date} onChange={handleChange} />
+                            </div>
+
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-medium mb-1">Description</label>
+                                <label className="block text-sm font-medium mb-1 text-gray-900">Description</label>
                                 <textarea
-                                    className="w-full border rounded-lg p-2 h-24"
+                                    className="w-full border border-gray-300 rounded-lg p-2 h-24 text-gray-900"
                                     name="description"
                                     value={formData.description}
                                     onChange={handleChange}
                                     placeholder="Video description..."
                                 />
                             </div>
+
+                            {userRole === "admin" && (
+                                <div className="md:col-span-2 flex flex-wrap gap-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            name="is_highlight"
+                                            checked={formData.is_highlight === 1}
+                                            onChange={handleChange}
+                                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                        />
+                                        <span className="text-sm font-medium text-blue-900 group-hover:text-blue-700 transition-colors">
+                                            Set as Highlight
+                                        </span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            name="is_approved"
+                                            checked={formData.is_approved === 1}
+                                            onChange={handleChange}
+                                            className="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500"
+                                        />
+                                        <span className="text-sm font-medium text-green-900 group-hover:text-green-700 transition-colors">
+                                            Approve Immediately
+                                        </span>
+                                    </label>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3">

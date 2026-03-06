@@ -17,8 +17,17 @@ export default function MainProfile() {
         website: "",
         country: "",
         genre: "",
+        photo: "",
+        cover_image: "",
     });
     const [userRole, setUserRole] = useState("");
+
+    const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+    const [isUploadingCover, setIsUploadingCover] = useState(false);
+    const [currentPhoto, setCurrentPhoto] = useState<string | null>(null);
+    const [currentCover, setCurrentCover] = useState<string | null>(null);
 
     const getAuthHeaders = () => {
         const token = typeof window !== "undefined" ? localStorage.getItem("soundcave_token") : null;
@@ -44,7 +53,18 @@ export default function MainProfile() {
                             website: user?.website || "",
                             country: user?.country || "",
                             genre: user?.genre || "",
+                            photo: user?.photo || "",
+                            cover_image: user?.cover_image || "",
                         });
+
+                        if (user?.photo) {
+                            const fullUrl = user.photo.startsWith('http') ? user.photo : `${CONFIG.API_URL}${user.photo}`;
+                            setCurrentPhoto(fullUrl);
+                        }
+                        if (user?.cover_image) {
+                            const fullUrl = user.cover_image.startsWith('http') ? user.cover_image : `${CONFIG.API_URL}${user.cover_image}`;
+                            setCurrentCover(fullUrl);
+                        }
                     }
                 }
 
@@ -62,7 +82,18 @@ export default function MainProfile() {
                             website: profile.website || "",
                             country: profile.country || "",
                             genre: profile.genre || "",
+                            photo: profile.photo || "",
+                            cover_image: profile.cover_image || "",
                         });
+
+                        if (profile.photo) {
+                            const fullUrl = profile.photo.startsWith('http') ? profile.photo : `${CONFIG.API_URL}${profile.photo}`;
+                            setCurrentPhoto(fullUrl);
+                        }
+                        if (profile.cover_image) {
+                            const fullUrl = profile.cover_image.startsWith('http') ? profile.cover_image : `${CONFIG.API_URL}${profile.cover_image}`;
+                            setCurrentCover(fullUrl);
+                        }
                     }
                 } catch {
                     // API might not exist yet, use localStorage data
@@ -82,7 +113,73 @@ export default function MainProfile() {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onloadend = () => setPhotoPreview(reader.result as string);
+            reader.readAsDataURL(file);
+            await uploadImage(file, 'photo');
+        }
+    };
 
+    const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onloadend = () => setCoverPreview(reader.result as string);
+            reader.readAsDataURL(file);
+            await uploadImage(file, 'cover');
+        }
+    };
+
+    const uploadImage = async (file: File, type: 'photo' | 'cover') => {
+        const isPhoto = type === 'photo';
+        if (isPhoto) {
+            setIsUploadingPhoto(true);
+        } else {
+            setIsUploadingCover(true);
+        }
+
+        try {
+            const token = localStorage.getItem("soundcave_token");
+            const uploadData = new FormData();
+            uploadData.append('file', file);
+            uploadData.append('folder', isPhoto ? 'artists/profile' : 'artists/cover');
+
+            const response = await axios.post(
+                `${CONFIG.API_URL}/api/images/upload`,
+                uploadData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        Authorization: token ? `Bearer ${token}` : "",
+                    },
+                }
+            );
+
+            if (response.data?.success && response.data?.data?.file_url) {
+                const imageUrl = response.data.data.file_url;
+                setFormData(prev => ({ ...prev, [isPhoto ? 'photo' : 'cover_image']: imageUrl }));
+                toast.success(`${isPhoto ? 'Photo' : 'Cover'} uploaded successfully`);
+            } else {
+                throw new Error('Failed to upload image');
+            }
+        } catch (err: any) {
+            toast.error(err?.message || "Failed to upload image.");
+            if (isPhoto) {
+                setPhotoPreview(null);
+            } else {
+                setCoverPreview(null);
+            }
+        } finally {
+            if (isPhoto) {
+                setIsUploadingPhoto(false);
+            } else {
+                setIsUploadingCover(false);
+            }
+        }
+    };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
@@ -104,12 +201,14 @@ export default function MainProfile() {
             if (response.data?.success) {
                 toast.success("Profile updated successfully!");
 
-                // Update localStorage
                 if (typeof window !== "undefined") {
                     const storedUser = localStorage.getItem("soundcave_user");
                     if (storedUser) {
                         const user = JSON.parse(storedUser);
-                        const updated = { ...user, ...formData };
+                        const updated = {
+                            ...user,
+                            ...formData,
+                        };
                         localStorage.setItem("soundcave_user", JSON.stringify(updated));
                     }
                 }
@@ -123,8 +222,8 @@ export default function MainProfile() {
         }
     };
 
-    const isArtist = userRole === "artist";
-    const roleLabel = isArtist ? "Independent Artist" : userRole === "label" ? "Label" : "User";
+    const isArtist = userRole === "artist" || userRole === "independent";
+    const roleLabel = userRole === "artist" ? "Artist" : userRole === "independent" ? "Independent Artist" : userRole === "label" ? "Label" : "User";
 
     return (
         <>
@@ -157,6 +256,56 @@ export default function MainProfile() {
                                     </span>
                                 </div>
 
+                                {isArtist && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                        {/* Profile Photo */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Artist Photo</label>
+                                            <div className="relative group">
+                                                <div className="w-32 h-32 rounded-xl overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center hover:border-blue-500 transition-colors">
+                                                    {(photoPreview || currentPhoto) ? (
+                                                        <img src={photoPreview || currentPhoto || ""} alt="Profile" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-gray-400 text-3xl">👤</span>
+                                                    )}
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handlePhotoChange}
+                                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                                        disabled={isUploadingPhoto}
+                                                    />
+                                                </div>
+                                                {isUploadingPhoto && <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-xl"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>}
+                                            </div>
+                                            <p className="mt-2 text-xs text-gray-500">JPG or PNG, max 2MB</p>
+                                        </div>
+
+                                        {/* Cover Banner */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Cover Banner</label>
+                                            <div className="relative group">
+                                                <div className="w-full h-32 rounded-xl overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center hover:border-blue-500 transition-colors">
+                                                    {(coverPreview || currentCover) ? (
+                                                        <img src={coverPreview || currentCover || ""} alt="Cover" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-gray-400 text-3xl">🖼️</span>
+                                                    )}
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleCoverChange}
+                                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                                        disabled={isUploadingCover}
+                                                    />
+                                                </div>
+                                                {isUploadingCover && <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-xl"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>}
+                                            </div>
+                                            <p className="mt-2 text-xs text-gray-500">Wide banner, max 5MB</p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
                                         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
@@ -164,7 +313,7 @@ export default function MainProfile() {
                                         </label>
                                         <Input
                                             id="name"
-                                            name="name"
+                                            name="full_name"
                                             type="text"
                                             required
                                             value={formData.full_name}

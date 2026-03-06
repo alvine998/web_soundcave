@@ -14,6 +14,7 @@ export default function CreateMusic() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [userRole, setUserRole] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     artist_id: '',
@@ -26,6 +27,7 @@ export default function CreateMusic() {
     description: '',
     lyrics: '',
     tags: '',
+    is_top100: 0,
   });
 
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -147,6 +149,11 @@ export default function CreateMusic() {
   };
 
   useEffect(() => {
+    const storedUser = localStorage.getItem('soundcave_user');
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      setUserRole(user.role || '');
+    }
     fetchArtists();
     fetchAlbums();
     fetchGenres();
@@ -302,6 +309,9 @@ export default function CreateMusic() {
         audio_file_url: audioFileUrl,
         duration: formData.duration,
         explicit: formData.explicit || false,
+        submitted_by: userRole || 'admin',
+        is_approved: userRole === 'admin' ? 1 : 0,
+        is_top100: userRole === 'admin' ? formData.is_top100 : 0,
       };
 
       // Optional fields
@@ -640,6 +650,39 @@ export default function CreateMusic() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 placeholder-gray-400 font-mono"
                   />
                 </div>
+
+                {/* Top 100 (Admin only) */}
+                {userRole === 'admin' && (
+                  <div className="mt-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Top 100
+                    </label>
+                    <div className="flex items-center space-x-6">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="is_top100"
+                          value={1}
+                          checked={formData.is_top100 === 1}
+                          onChange={() => setFormData(prev => ({ ...prev, is_top100: 1 }))}
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">Yes</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="is_top100"
+                          value={0}
+                          checked={formData.is_top100 === 0}
+                          onChange={() => setFormData(prev => ({ ...prev, is_top100: 0 }))}
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">No</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}

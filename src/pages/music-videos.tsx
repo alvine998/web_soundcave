@@ -31,6 +31,9 @@ interface MusicVideo {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  is_approved: number;
+  is_highlight: number;
+  submitted_by: string;
 }
 
 export default function MusicVideos() {
@@ -58,6 +61,9 @@ export default function MusicVideos() {
   );
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
   const [isLoadingGenres, setIsLoadingGenres] = useState(false);
+  const [userRole, setUserRole] = useState("");
+  const [adminUserId, setAdminUserId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'request_approval'>('all');
 
   // Helper function untuk mendapatkan token dari localStorage
   const getAuthToken = (): string | null => {
@@ -99,6 +105,9 @@ export default function MusicVideos() {
       if (filterGenre !== "all") {
         params.genre = filterGenre;
       }
+      if (activeTab === 'request_approval') {
+        params.is_approved = 0;
+      }
 
       const response = await axios.get(
         `${CONFIG.API_URL}/api/music-videos`,
@@ -123,6 +132,9 @@ export default function MusicVideos() {
           created_at: item.created_at,
           updated_at: item.updated_at,
           deleted_at: item.deleted_at || null,
+          is_approved: item.is_approved || 0,
+          is_highlight: item.is_highlight || 0,
+          submitted_by: item.submitted_by || "",
         }));
         setVideos(videosList);
 
@@ -217,7 +229,7 @@ export default function MusicVideos() {
   useEffect(() => {
     fetchMusicVideos(1, searchQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterArtist, filterGenre, sortBy, order]);
+  }, [filterArtist, filterGenre, sortBy, order, activeTab]);
 
   // Fetch on page change
   useEffect(() => {
@@ -230,6 +242,15 @@ export default function MusicVideos() {
     fetchMusicVideos();
     fetchArtists();
     fetchGenres();
+
+    const storedUser = localStorage.getItem("soundcave_user");
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      setUserRole(user.role);
+      if (user.role === "admin") {
+        setAdminUserId(user.id);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -282,6 +303,40 @@ export default function MusicVideos() {
     }
   };
 
+  const handleApproval = async (id: number) => {
+    if (!confirm("Approve this music video?")) return;
+    try {
+      const response = await axios.put(`${CONFIG.API_URL}/api/music-videos/${id}`, {
+        is_approved: 1,
+        approved_by: adminUserId
+      }, getAuthHeaders());
+
+      if (response.data?.success) {
+        toast.success("Music video approved!");
+        fetchMusicVideos(page, searchQuery);
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to approve music video.");
+    }
+  };
+
+  const handleReject = async (id: number) => {
+    if (!confirm("Reject this music video?")) return;
+    try {
+      const response = await axios.put(`${CONFIG.API_URL}/api/music-videos/${id}`, {
+        is_approved: 2, // Reject
+        approved_by: adminUserId
+      }, getAuthHeaders());
+
+      if (response.data?.success) {
+        toast.success("Music video rejected!");
+        fetchMusicVideos(page, searchQuery);
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to reject music video.");
+    }
+  };
+
 
   return (
     <>
@@ -297,6 +352,30 @@ export default function MusicVideos() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Music Videos</h1>
             <p className="text-gray-600">Kelola semua music video di platform Anda</p>
           </div>
+
+          {/* Tabs for Admin */}
+          {userRole === "admin" && (
+            <div className="flex space-x-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
+              <button
+                onClick={() => { setActiveTab('all'); setPage(1); }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'all'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                  }`}
+              >
+                All Music Videos
+              </button>
+              <button
+                onClick={() => { setActiveTab('request_approval'); setPage(1); }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'request_approval'
+                  ? 'bg-white text-orange-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                  }`}
+              >
+                Request Approval
+              </button>
+            </div>
+          )}
 
 
           {/* Search and Actions */}
@@ -416,7 +495,7 @@ export default function MusicVideos() {
                     className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
                   >
                     {/* Thumbnail */}
-                    <div className="h-48 bg-gradient-to-br from-red-400 to-pink-600 flex items-center justify-center overflow-hidden">
+                    <div className="h-48 bg-gradient-to-br from-red-400 to-pink-600 flex items-center justify-center overflow-hidden relative">
                       {video.thumbnail ? (
                         <img
                           src={video.thumbnail}
@@ -426,14 +505,19 @@ export default function MusicVideos() {
                       ) : (
                         <span className="text-6xl">🎬</span>
                       )}
+                      {video.is_highlight === 1 && (
+                        <div className="absolute top-2 left-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm uppercase tracking-wider">
+                          Highlight
+                        </div>
+                      )}
                     </div>
 
                     {/* Content */}
                     <div className="p-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">
                         {video.title}
                       </h3>
-                      <p className="text-sm text-gray-600 mb-2">{video.artist}</p>
+                      <p className="text-sm text-gray-600 mb-2 truncate">{video.artist}</p>
                       <div className="flex items-center gap-2 mb-3">
                         <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
                           {video.genre}
@@ -450,18 +534,50 @@ export default function MusicVideos() {
                       )}
 
                       <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleEditClick(video)}
-                          className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(video)}
-                          className="px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm"
-                        >
-                          Delete
-                        </button>
+                        {userRole === 'admin' && video.is_approved === 0 && (video.submitted_by === 'artist' || video.submitted_by === 'label') ? (
+                          <div className="flex items-center gap-2 w-full">
+                            <button
+                              onClick={() => handleEditClick(video)}
+                              className="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex-1"
+                            >
+                              Detail
+                            </button>
+                            <button
+                              onClick={() => handleApproval(video.id)}
+                              className="px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors flex-1"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleReject(video.id)}
+                              className="px-3 py-2 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors flex-1"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : activeTab === 'request_approval' ? (
+                          <button
+                            onClick={() => handleApproval(video.id)}
+                            className="w-full px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors"
+                          >
+                            Approve
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEditClick(video)}
+                              className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(video)}
+                              className="px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -551,4 +667,3 @@ export default function MusicVideos() {
     </>
   );
 }
-

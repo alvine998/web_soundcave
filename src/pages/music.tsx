@@ -36,6 +36,7 @@ interface Music {
   cover_image_url: string | null;
   play_count: number;
   like_count: number;
+  is_top100: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -57,6 +58,7 @@ export default function Music() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'request_approval'>('all');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedMusic, setSelectedMusic] = useState<Music | null>(null);
@@ -74,6 +76,7 @@ export default function Music() {
     lyrics: "",
     description: "",
     tags: "",
+    is_top100: 0,
   });
   const [artists, setArtists] = useState<Array<{ id: number; name: string }>>(
     []
@@ -86,6 +89,7 @@ export default function Music() {
   );
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
   const [isLoadingGenres, setIsLoadingGenres] = useState(false);
+  const [adminId, setAdminId] = useState<number | null>(null);
 
   // Helper function untuk mendapatkan token dari localStorage
   const getAuthToken = (): string | null => {
@@ -144,6 +148,9 @@ export default function Music() {
       if (filterExplicit !== "all") {
         params.explicit = filterExplicit === "true";
       }
+      if (activeTab === 'request_approval') {
+        params.is_approved = 0;
+      }
 
       const response = await axios.get(`${CONFIG.API_URL}/api/musics`, {
         params,
@@ -173,8 +180,13 @@ export default function Music() {
           created_at: item.created_at,
           updated_at: item.updated_at,
           deleted_at: item.deleted_at || null,
+          is_top100: item.is_top100,
+          is_approved: item.is_approved,
+          notes: item.notes,
+          submitted_by: item.submitted_by,
         }));
         setMusics(musicsList);
+
 
         if (response.data?.pagination) {
           setPage(response.data.pagination.page);
@@ -280,6 +292,36 @@ export default function Music() {
     }
   };
 
+  const handleApproval = async (musicId: number, status: number) => {
+    try {
+      const token = getAuthToken();
+      const payload = {
+        is_approved: status,
+        approved_by: status === 1 ? adminId : null
+      };
+
+      const response = await axios.put(
+        `${CONFIG.API_URL}/api/musics/${musicId}`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success) {
+        toast.success(status === 1 ? "Music approved!" : "Music rejected!");
+        fetchMusics(page, searchQuery);
+      } else {
+        toast.error(response.data?.message || "Failed to update approval status.");
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "An error occurred.");
+    }
+  };
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -296,6 +338,12 @@ export default function Music() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterGenre, filterArtist, filterLanguage, filterExplicit, sortBy, order]);
 
+  // Fetch on tab change
+  useEffect(() => {
+    fetchMusics(1, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   // Fetch on page change
   useEffect(() => {
     fetchMusics(page, searchQuery);
@@ -304,6 +352,13 @@ export default function Music() {
 
   // Initial fetch
   useEffect(() => {
+    const storedUser = localStorage.getItem("soundcave_user");
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      if (user.role === "admin") {
+        setAdminId(user.id);
+      }
+    }
     fetchMusics();
     fetchArtists();
     fetchAlbums();
@@ -334,6 +389,7 @@ export default function Music() {
       lyrics: music.lyrics || "",
       description: music.description || "",
       tags: music.tags || "",
+      is_top100: (music as any).is_top100 || 0,
     });
     setSelectedMusic(music);
     setIsEditModalOpen(true);
@@ -360,6 +416,7 @@ export default function Music() {
         release_date: formData.release_date,
         duration: formData.duration,
         explicit: formData.explicit,
+        is_top100: formData.is_top100,
       };
 
       // Optional fields
@@ -418,6 +475,7 @@ export default function Music() {
         lyrics: "",
         description: "",
         tags: "",
+        is_top100: 0,
       });
       success(
         "Music Updated Successfully",
@@ -505,6 +563,28 @@ export default function Music() {
             <p className="text-gray-600">Kelola semua musik dalam platform Anda</p>
           </div>
 
+          {/* Tabs */}
+          <div className="flex space-x-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
+            <button
+              onClick={() => { setActiveTab('all'); setPage(1); }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'all'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              All Music
+            </button>
+            <button
+              onClick={() => { setActiveTab('request_approval'); setPage(1); }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'request_approval'
+                ? 'bg-white text-orange-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              Request Approval
+            </button>
+          </div>
+
           {/* Filters and Actions */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex flex-col gap-4">
@@ -536,7 +616,7 @@ export default function Music() {
 
                 {/* Right Side - Actions */}
                 <div className="flex gap-3">
-                  <button 
+                  <button
                     onClick={() => router.push('/music/create')}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
                   >
@@ -551,14 +631,14 @@ export default function Music() {
               {/* Bottom Row - Filters */}
               <div className="flex flex-wrap items-center gap-3">
                 {/* Genre Filter */}
-                <div className="flex-shrink-0">
-                <select
-                  value={filterGenre}
-                  onChange={(e) => setFilterGenre(e.target.value)}
+                <div className="shrink-0">
+                  <select
+                    value={filterGenre}
+                    onChange={(e) => setFilterGenre(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[140px]"
-                >
+                  >
                     <option value="all">All Genres</option>
-                  {genres.map((genre) => (
+                    {genres.map((genre) => (
                       <option key={genre.id} value={genre.name}>
                         {genre.name}
                       </option>
@@ -567,7 +647,7 @@ export default function Music() {
                 </div>
 
                 {/* Artist Filter */}
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <select
                     value={filterArtist}
                     onChange={(e) => setFilterArtist(e.target.value)}
@@ -592,9 +672,9 @@ export default function Music() {
                     {languages.map((lang) => (
                       <option key={lang} value={lang}>
                         {lang === "all" ? "All Languages" : lang}
-                    </option>
-                  ))}
-                </select>
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Explicit Filter */}
@@ -612,17 +692,17 @@ export default function Music() {
 
                 {/* Sort By */}
                 <div className="flex-shrink-0">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 min-w-[180px]"
-                >
+                  >
                     <option value="created_at">Terbaru</option>
-                  <option value="title">Judul (A-Z)</option>
+                    <option value="title">Judul (A-Z)</option>
                     <option value="play_count">Paling Banyak Diputar</option>
                     <option value="like_count">Paling Banyak Disukai</option>
-                </select>
-              </div>
+                  </select>
+                </div>
 
                 {/* Order */}
                 <div className="flex-shrink-0">
@@ -666,6 +746,9 @@ export default function Music() {
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Status
                     </th>
+                    <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider text-center">
+                      Top 100
+                    </th>
                     <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Actions
                     </th>
@@ -690,8 +773,8 @@ export default function Music() {
                         key={music.id}
                         className="hover:bg-gray-50 transition-colors"
                       >
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
+                        <td className="py-4 px-6">
+                          <div className="flex items-center space-x-3">
                             <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center shrink-0 overflow-hidden">
                               {music.cover_image_url ? (
                                 <img
@@ -700,108 +783,164 @@ export default function Music() {
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                            <span className="text-xl">🎵</span>
+                                <span className="text-xl">🎵</span>
                               )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {music.title}
-                            </p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {music.title}
+                              </p>
                               <p className="text-xs text-gray-500">
                                 {new Date(music.created_at).toLocaleDateString()}
                               </p>
                             </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900">
-                        {music.artist}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-700">
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-900">
+                          {music.artist}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-700">
                           {music.album || "-"}
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                          {music.genre}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-700">
-                        {music.duration}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900 font-medium">
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                            {music.genre}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-700">
+                          {music.duration}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-900 font-medium">
                           {music.play_count.toLocaleString()}
-                      </td>
-                      <td className="py-4 px-6">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded ${
-                              !music.deleted_at
-                                ? "bg-green-100 text-green-700"
-                                : "bg-gray-100 text-gray-700"
-                            }`}
+                        </td>
+                        <td className="py-4 px-6">
+                          <span
+                            className={`px-2 py-1 text-xs font-medium rounded ${!music.deleted_at
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-100 text-gray-700"
+                              }`}
                           >
                             {!music.deleted_at ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <button
-                            onClick={() => router.push(`/music/${music.id}`)}
-                            className="text-blue-600 hover:text-blue-700"
-                            title="View Details"
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          {music.is_top100 == 1 ? (
+                            <svg className="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-5 h-5 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center space-x-3">
+                            <button
+                              onClick={() => router.push(`/music/${music.id}`)}
+                              className="text-blue-600 hover:text-blue-700"
+                              title="View Details"
                             >
-                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <svg
+                                className="w-5 h-5"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                                 <path
                                   fillRule="evenodd"
                                   d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
                                   clipRule="evenodd"
                                 />
-                            </svg>
-                          </button>
-                          <button
-                              onClick={() => handleEditClick(music)}
-                            className="text-gray-600 hover:text-gray-700"
-                            title="Edit"
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                              onClick={() => handleDeleteClick(music)}
-                            className="text-red-600 hover:text-red-700"
-                            title="Delete"
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                              </svg>
+                            </button>
+                            {activeTab !== 'request_approval' && (
+                              <button
+                                onClick={() => handleEditClick(music)}
+                                className="text-gray-600 hover:text-gray-700"
+                                title="Edit"
+                              >
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                  />
+                                </svg>
+                              </button>
+                            )}
+                            {activeTab === 'request_approval' && (
+                              <>
+                                <button
+                                  onClick={() => handleApproval(music.id, 1)}
+                                  className="text-green-600 hover:text-green-700"
+                                  title="Approve"
+                                >
+                                  <svg
+                                    className="w-5 h-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleApproval(music.id, 2)}
+                                  className="text-orange-600 hover:text-orange-700"
+                                  title="Reject"
+                                >
+                                  <svg
+                                    className="w-5 h-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                            {activeTab !== 'request_approval' && (
+                              <button
+                                onClick={() => handleDeleteClick(music)}
+                                className="text-red-600 hover:text-red-700"
+                                title="Delete"
+                              >
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     ))
                   )}
                 </tbody>
@@ -1062,6 +1201,35 @@ export default function Music() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-gray-900 placeholder-gray-400 font-mono"
                   />
                 </div>
+
+                {/* Top 100 */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Top 100
+                  </label>
+                  <div className="flex items-center space-x-6">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="edit-is_top100"
+                        checked={formData.is_top100 === 1}
+                        onChange={() => setFormData(prev => ({ ...prev, is_top100: 1 }))}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">Yes</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="edit-is_top100"
+                        checked={formData.is_top100 === 0}
+                        onChange={() => setFormData(prev => ({ ...prev, is_top100: 0 }))}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">No</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <DialogFooter>
@@ -1094,7 +1262,7 @@ export default function Music() {
               </DialogHeader>
 
               <div className="flex items-start space-x-4 mt-4">
-                  <div className="shrink-0">
+                <div className="shrink-0">
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
                     <svg
                       className="w-6 h-6 text-red-600"

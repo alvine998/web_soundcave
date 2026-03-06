@@ -23,6 +23,7 @@ export default function MainSongEdit() {
         genre: "",
         duration: "",
         explicit: false,
+        release_date: "",
     });
 
     const [audioFileUrl, setAudioFileUrl] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export default function MainSongEdit() {
                     genre: song.genre || "",
                     duration: song.duration || "",
                     explicit: song.explicit || false,
+                    release_date: song.release_date ? song.release_date.split('T')[0] : "",
                 });
                 setAudioFileUrl(song.audio_file_url);
                 setCoverImageUrl(song.cover_image_url || song.cover_image);
@@ -195,6 +197,7 @@ export default function MainSongEdit() {
             album_id: formData.album_id ? parseInt(formData.album_id) : undefined,
             audio_file_url: audioFileUrl,
             cover_image_url: coverImageUrl,
+            release_date: formData.release_date,
         };
 
         try {
@@ -298,8 +301,13 @@ export default function MainSongEdit() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Duration (e.g. 3:45)</label>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Duration (e.g. 3:45)</label>
                                 <Input name="duration" value={formData.duration} onChange={handleChange} placeholder="3:45" />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700">Release Date</label>
+                                <Input type="date" name="release_date" value={formData.release_date} onChange={handleChange} />
                             </div>
                         </div>
 

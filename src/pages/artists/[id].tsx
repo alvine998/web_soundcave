@@ -6,6 +6,7 @@ import Layout from '@/components/Layout';
 import { useToast } from '@/components/ui/toast';
 import axios from 'axios';
 import { CONFIG } from '@/config';
+import Image from 'next/image';
 
 // Dynamically import recharts to avoid SSR issues (recharts uses browser APIs)
 const RechartsComponents = dynamic(
@@ -65,8 +66,11 @@ export default function ArtistDetail() {
       facebook: '',
       youtube: '',
     },
+    photo: '',
+    cover_image: '',
   });
   const [albums, setAlbums] = useState<any[]>([]);
+  const [topSongs, setTopSongs] = useState<any[]>([]);
 
   // Helper function untuk mendapatkan token dari localStorage
   const getAuthToken = (): string | null => {
@@ -113,17 +117,23 @@ export default function ArtistDetail() {
             createdAt: artist.created_at
               ? artist.created_at.split('T')[0]
               : '',
-            followers: 0, // Default values (bisa diambil dari API nanti jika ada)
-            songs: 0,
-            albums: 0,
-            monthlyListeners: 0,
-            verified: false,
+            followers: artist.follower_count || 0,
+            songs: 0, // Will be updated by fetchTopSongs
+            albums: 0, // Will be updated by fetchAlbums
+            monthlyListeners: artist.monthly_listeners || (artist.play_count || 0),
+            verified: artist.is_verified || false,
             socialMedia: {
               instagram: artist.socialMedia?.instagram || '',
               twitter: artist.socialMedia?.twitter || '',
               facebook: artist.socialMedia?.facebook || '',
               youtube: artist.socialMedia?.youtube || '',
             },
+            photo: artist.photo
+              ? (artist.photo.startsWith('http') ? artist.photo : `${CONFIG.API_URL}${artist.photo}`)
+              : '',
+            cover_image: artist.cover_image
+              ? (artist.cover_image.startsWith('http') ? artist.cover_image : `${CONFIG.API_URL}${artist.cover_image}`)
+              : '',
           });
         } else {
           error(
@@ -146,21 +156,46 @@ export default function ArtistDetail() {
       if (!id || typeof id !== 'string') return;
       try {
         const response = await axios.get(`${CONFIG.API_URL}/api/albums`, {
-          params: { artist_id: id },
+          params: { artist_id: id, page: 1, limit: 5 },
           ...getAuthHeaders(),
         });
         if (response.data?.success) {
           setAlbums(response.data.data || []);
+          setArtistData(prev => ({
+            ...prev,
+            albums: response.data.pagination?.total || (response.data.data?.length || 0)
+          }));
         }
       } catch (err) {
         console.error("Failed to fetch artist albums:", err);
       }
     };
 
+    const fetchTopSongs = async () => {
+      if (!id || typeof id !== 'string') return;
+      try {
+        const response = await axios.get(`${CONFIG.API_URL}/api/musics`, {
+          params: { artist_id: id, page: 1, limit: 10 },
+          ...getAuthHeaders(),
+        });
+        if (response.data?.success) {
+          setTopSongs(response.data.data || []);
+          setArtistData(prev => ({
+            ...prev,
+            songs: response.data.pagination?.total || (response.data.data?.length || 0)
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch artist songs:", err);
+      }
+    };
+
     fetchArtist();
     fetchAlbums();
+    fetchTopSongs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
 
   const weeklyListeners = [
     { day: 'Mon', listeners: 12000 },
@@ -171,14 +206,11 @@ export default function ArtistDetail() {
     { day: 'Sat', listeners: 18500 },
     { day: 'Sun', listeners: 17600 },
   ];
-
-  const topSongs = [
-    { title: 'Summer Vibes', plays: 12500, likes: 2340 },
-    { title: 'Ocean Breeze', plays: 11200, likes: 2150 },
-    { title: 'Beach Paradise', plays: 9800, likes: 1890 },
-    { title: 'Sunset Dreams', plays: 8900, likes: 1720 },
-    { title: 'Coastal Love', plays: 8100, likes: 1580 },
-  ];
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to delete this artist?')) {
@@ -237,14 +269,25 @@ export default function ArtistDetail() {
                   {/* Artist Profile Card */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     {/* Cover Image */}
-                    <div className="h-48 bg-linear-to-br from-blue-400 to-purple-600 relative">
+                    <div className="h-64 w-full relative bg-gray-100">
+                      {artistData.cover_image ? (
+                        <Image
+                          src={artistData.cover_image}
+                          alt={`${artistData.name} Cover`}
+                          fill
+                          className="object-cover"
+                          priority
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-linear-to-br from-blue-400 to-purple-600"></div>
+                      )}
+
                       {artistData.verified && (
-                        <div className="absolute top-4 right-4 bg-blue-600 text-white rounded-full p-2">
+                        <div className="absolute top-4 right-4 bg-blue-600 text-white rounded-full p-2 z-10 shadow-lg">
                           <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                             <path
                               fillRule="evenodd"
                               d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                              clipRule="evenodd"
                             />
                           </svg>
                         </div>
@@ -255,23 +298,21 @@ export default function ArtistDetail() {
                     <div className="p-6">
                       <div className="flex items-start space-x-6 mb-6">
                         {/* Profile Image */}
-                        <div className="w-28 h-28 rounded-full flex items-center justify-center shrink-0 border-4 border-white overflow-hidden bg-blue-100">
-                          {artistData.profileImage ? (
-                            <img
-                              src={artistData.profileImage}
+                        <div className="w-32 h-32 rounded-full relative -mt-16 ml-2 border-4 border-white shadow-md overflow-hidden bg-blue-50 flex items-center justify-center shrink-0">
+                          {artistData.photo ? (
+                            <Image
+                              src={artistData.photo}
                               alt={artistData.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                              }}
+                              fill
+                              className="object-cover"
                             />
-                          ) : null}
-                          <span className={`text-5xl ${artistData.profileImage ? 'hidden' : ''}`}>🎤</span>
+                          ) : (
+                            <span className="text-5xl">🎤</span>
+                          )}
                         </div>
 
                         {/* Info */}
-                        <div className="flex-1 mt-4">
+                        <div className="flex-1 mt-2">
                           <h1 className="text-3xl font-bold text-gray-900 mb-2">
                             {artistData.name}
                           </h1>
@@ -298,22 +339,22 @@ export default function ArtistDetail() {
                       {/* Stats */}
                       <div className="grid grid-cols-4 gap-4 py-4 border-t border-b border-gray-100">
                         <div className="text-center">
-                          <p className="text-2xl font-bold text-gray-900">{artistData.songs}</p>
+                          <p className="text-2xl font-bold text-gray-900">{formatNumber(artistData.songs)}</p>
                           <p className="text-xs text-gray-600">Songs</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-2xl font-bold text-gray-900">{artistData.albums}</p>
+                          <p className="text-2xl font-bold text-gray-900">{formatNumber(artistData.albums)}</p>
                           <p className="text-xs text-gray-600">Albums</p>
                         </div>
                         <div className="text-center">
                           <p className="text-2xl font-bold text-gray-900">
-                            {(artistData.followers / 1000).toFixed(0)}K
+                            {formatNumber(artistData.followers)}
                           </p>
                           <p className="text-xs text-gray-600">Followers</p>
                         </div>
                         <div className="text-center">
                           <p className="text-2xl font-bold text-gray-900">
-                            {(artistData.monthlyListeners / 1000).toFixed(0)}K
+                            {formatNumber(artistData.monthlyListeners)}
                           </p>
                           <p className="text-xs text-gray-600">Monthly</p>
                         </div>
@@ -331,32 +372,48 @@ export default function ArtistDetail() {
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Popular Songs</h3>
                     <div className="space-y-4">
-                      {topSongs.map((song, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0"
-                        >
-                          <div className="flex items-center space-x-4">
-                            <span className="text-lg font-bold text-gray-400 w-8 text-center">
-                              #{index + 1}
-                            </span>
-                            <div className="w-12 h-12 bg-blue-100 rounded flex items-center justify-center">
-                              <span className="text-xl">🎵</span>
+                      {topSongs.length === 0 ? (
+                        <p className="text-sm text-gray-500">No songs found for this artist.</p>
+                      ) : (
+                        topSongs.map((song, index) => (
+                          <div
+                            key={song.id}
+                            className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0"
+                          >
+                            <div className="flex items-center space-x-4">
+                              <span className="text-lg font-bold text-gray-400 w-8 text-center">
+                                #{index + 1}
+                              </span>
+                              <div className="w-12 h-12 bg-blue-50 rounded overflow-hidden flex items-center justify-center relative">
+                                {song.cover_image ? (
+                                  <Image
+                                    src={song.cover_image.startsWith('http') ? song.cover_image : `${CONFIG.API_URL}${song.cover_image}`}
+                                    alt={song.title}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-xl">🎵</span>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{song.title}</p>
+                                <p className="text-xs text-gray-600">
+                                  {song.play_count?.toLocaleString() || 0} plays • {song.like_count?.toLocaleString() || 0} likes
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{song.title}</p>
-                              <p className="text-xs text-gray-600">
-                                {song.plays.toLocaleString()} plays • {song.likes.toLocaleString()} likes
-                              </p>
+                            <div className="flex items-center space-x-4">
+                              <span className="text-xs text-gray-500 font-mono">{song.duration}</span>
+                              <button className="text-blue-600 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50 transition-colors">
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                                </svg>
+                              </button>
                             </div>
                           </div>
-                          <button className="text-blue-600 hover:text-blue-700">
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
 

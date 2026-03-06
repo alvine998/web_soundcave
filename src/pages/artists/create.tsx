@@ -22,6 +22,9 @@ export default function CreateArtist() {
     website: '',
     bio: '',
     debutYear: '',
+    is_highlight: 0,
+    cover_image: '',
+    photo: '',
     socialMedia: {
       instagram: '',
       twitter: '',
@@ -29,6 +32,11 @@ export default function CreateArtist() {
       youtube: '',
     },
   });
+
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
 
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
@@ -93,7 +101,7 @@ export default function CreateArtist() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
+
     if (name.startsWith('social_')) {
       const socialKey = name.replace('social_', '');
       setFormData(prev => ({
@@ -110,6 +118,66 @@ export default function CreateArtist() {
       }));
     }
   };
+
+  const handleCoverImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setCoverImage(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload image immediately
+      await uploadCoverImage(file);
+    }
+  };
+
+  const uploadCoverImage = async (file: File) => {
+    try {
+      setIsUploadingCover(true);
+      const token = getAuthToken();
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'artists/cover');
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/images/upload`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (response.data?.success && response.data?.data?.file_url) {
+        const imageUrl = response.data.data.file_url;
+        setCoverImageUrl(imageUrl);
+        setFormData(prev => ({ ...prev, cover_image: imageUrl }));
+        toast.success(response.data?.message || 'Cover image uploaded successfully');
+      } else {
+        throw new Error(response.data?.message || 'Failed to upload cover image');
+      }
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        'Failed to upload cover image. Please try again.';
+      error('Failed to Upload Cover Image', msg);
+      toast.error(msg);
+      setCoverImage(null);
+      setCoverImagePreview(null);
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
 
   const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -151,6 +219,7 @@ export default function CreateArtist() {
       if (response.data?.success && response.data?.data?.file_url) {
         const imageUrl = response.data.data.file_url;
         setProfileImageUrl(imageUrl);
+        setFormData(prev => ({ ...prev, photo: imageUrl }));
         toast.success(response.data?.message || 'Image uploaded successfully');
       } else {
         throw new Error(response.data?.message || 'Failed to upload image');
@@ -184,7 +253,15 @@ export default function CreateArtist() {
         country: formData.country,
         debut_year: formData.debutYear,
         email: formData.email,
+        is_highlight: formData.is_highlight,
       };
+
+      if (formData.cover_image) {
+        payload.cover_image = formData.cover_image;
+      }
+      if (formData.photo) {
+        payload.photo = formData.photo;
+      }
 
       // Optional fields
       if (formData.phone) {
@@ -291,14 +368,13 @@ export default function CreateArtist() {
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
               {/* Images Upload */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Profile Image</h2>
-                
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Photo */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Profile Photo
+                    Artist Photo
                   </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors max-w-md">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
                     <input
                       type="file"
                       accept="image/*"
@@ -326,7 +402,48 @@ export default function CreateArtist() {
                       ) : (
                         <>
                           <div className="text-4xl mb-2">👤</div>
-                          <p className="text-sm text-gray-600">Click to upload profile photo</p>
+                          <p className="text-sm text-gray-600">Click to upload artist photo</p>
+                          <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                {/* Cover Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Cover Banner
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCoverImageChange}
+                      className="hidden"
+                      id="cover-upload"
+                      disabled={isUploadingCover}
+                    />
+                    <label htmlFor="cover-upload" className={`cursor-pointer ${isUploadingCover ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {coverImagePreview ? (
+                        <div className="space-y-2">
+                          <img
+                            src={coverImagePreview}
+                            alt="Preview"
+                            className="mx-auto h-32 w-full object-cover rounded-lg"
+                          />
+                          <p className="text-sm text-gray-900 font-medium">{coverImage?.name}</p>
+                          {isUploadingCover && (
+                            <p className="text-xs text-blue-600">Uploading...</p>
+                          )}
+                          {coverImageUrl && !isUploadingCover && (
+                            <p className="text-xs text-green-600">✓ Uploaded successfully</p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-4xl mb-2">🖼️</div>
+                          <p className="text-sm text-gray-600">Click to upload cover banner</p>
                           <p className="text-xs text-gray-500 mt-1">JPG, PNG up to 5MB</p>
                         </>
                       )}
@@ -335,10 +452,38 @@ export default function CreateArtist() {
                 </div>
               </div>
 
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Highlight Status
+                </label>
+                <div className="flex items-center space-x-6">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="is_highlight"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      checked={formData.is_highlight === 1}
+                      onChange={() => setFormData(prev => ({ ...prev, is_highlight: 1 }))}
+                    />
+                    <span className="ml-2 text-sm text-gray-700 font-medium">Highlight</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="is_highlight"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      checked={formData.is_highlight === 0}
+                      onChange={() => setFormData(prev => ({ ...prev, is_highlight: 0 }))}
+                    />
+                    <span className="ml-2 text-sm text-gray-700 font-medium">Standard</span>
+                  </label>
+                </div>
+              </div>
+
               {/* Basic Information */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Name */}
                   <div>
@@ -484,7 +629,7 @@ export default function CreateArtist() {
               {/* Social Media */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Social Media</h2>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Instagram */}
                   <div>

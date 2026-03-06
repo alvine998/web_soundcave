@@ -17,7 +17,11 @@ interface Song {
     duration: string;
     play_count: number;
     like_count: number;
+    is_approved: number;
+    is_top100: number;
+    notes: string | null;
     cover_image?: string;
+    cover_image_url?: string;
 }
 
 export default function MainSong() {
@@ -60,7 +64,11 @@ export default function MainSong() {
                     duration: item.duration || "-",
                     play_count: item.play_count || 0,
                     like_count: item.like_count || 0,
+                    is_approved: item.is_approved || 0,
+                    is_top100: item.is_top100 || 0,
+                    notes: item.notes || null,
                     cover_image: item.cover_image,
+                    cover_image_url: item.cover_image_url,
                 })));
 
                 const pagination = response.data.pagination || {};
@@ -199,6 +207,9 @@ export default function MainSong() {
                                                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Duration</th>
                                                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Plays</th>
                                                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Likes</th>
+                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider text-center">Top 100</th>
+                                                <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Notes</th>
                                                 <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                                             </tr>
                                         </thead>
@@ -208,8 +219,8 @@ export default function MainSong() {
                                                     <td className="py-4 px-6">
                                                         <div className="flex items-center space-x-3">
                                                             <div className="shrink-0 h-10 w-10 rounded overflow-hidden bg-gray-200 flex items-center justify-center">
-                                                                {song.cover_image ? (
-                                                                    <img src={song.cover_image} alt={song.title} className="h-full w-full object-cover" />
+                                                                {song.cover_image_url ? (
+                                                                    <img src={song.cover_image_url} alt={song.title} className="h-full w-full object-cover" />
                                                                 ) : (
                                                                     <span className="text-xl">🎵</span>
                                                                 )}
@@ -224,9 +235,32 @@ export default function MainSong() {
                                                     <td className="py-4 px-6">
                                                         <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">{song.genre}</span>
                                                     </td>
-                                                    <td className="py-4 px-6 text-sm text-gray-600">{formatDuration(song.duration)}</td>
+                                                    <td className="py-4 px-6 text-sm text-gray-600">{song.duration}</td>
                                                     <td className="py-4 px-6 text-sm text-gray-900 font-medium">{song.play_count.toLocaleString()}</td>
                                                     <td className="py-4 px-6 text-sm text-gray-900 font-medium">{song.like_count.toLocaleString()}</td>
+                                                    <td className="py-4 px-6">
+                                                        {song.is_approved === 1 ? (
+                                                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">Published</span>
+                                                        ) : song.is_approved === 2 ? (
+                                                            <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">Rejected</span>
+                                                        ) : (
+                                                            <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-medium rounded">Waiting</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-4 px-6 text-center">
+                                                        {song.is_top100 === 1 ? (
+                                                            <svg className="w-5 h-5 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        ) : (
+                                                            <svg className="w-5 h-5 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-4 px-6 text-sm text-gray-600">
+                                                        {song.notes || "-"}
+                                                    </td>
                                                     <td className="py-4 px-6">
                                                         <button
                                                             onClick={() => router.push(`/main/song/edit/${song.id}`)}

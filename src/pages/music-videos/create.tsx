@@ -24,7 +24,10 @@ export default function CreateMusicVideo() {
     description: "",
     video_url: "",
     thumbnail: "",
+    is_highlight: 0,
   });
+
+  const [userRole, setUserRole] = useState("");
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -124,6 +127,12 @@ export default function CreateMusicVideo() {
   useEffect(() => {
     fetchArtists();
     fetchGenres();
+
+    const storedUser = localStorage.getItem("soundcave_user");
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      setUserRole(user.role);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -287,6 +296,7 @@ export default function CreateMusicVideo() {
         description: formData.description || null,
         video_url: videoUrlToUse,
         thumbnail: thumbnailUrlToUse,
+        is_highlight: formData.is_highlight,
       };
 
       const response = await axios.post(
@@ -591,6 +601,35 @@ export default function CreateMusicVideo() {
                     placeholder="Enter video description"
                   />
                 </div>
+
+                {/* Is Highlight Toggle (Admin Only) */}
+                {userRole === "admin" && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center space-x-3 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="is_highlight"
+                          name="is_highlight"
+                          type="checkbox"
+                          checked={formData.is_highlight === 1}
+                          onChange={(e) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              is_highlight: e.target.checked ? 1 : 0
+                            }));
+                          }}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+                      <div className="text-sm">
+                        <label htmlFor="is_highlight" className="font-medium text-blue-900 cursor-pointer select-none">
+                          Set as Highlight Video
+                        </label>
+                        <p className="text-blue-700 text-xs">This video will be featured prominently in the highlights section.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}

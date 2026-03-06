@@ -22,6 +22,7 @@ export default function MainSongCreate() {
         genre: "",
         duration: "",
         explicit: false,
+        release_date: "",
     });
 
     const [audioFileUrl, setAudioFileUrl] = useState<string | null>(null);
@@ -186,6 +187,10 @@ export default function MainSongCreate() {
             album_id: formData.album_id ? parseInt(formData.album_id) : undefined,
             audio_file_url: audioFileUrl,
             cover_image_url: coverImageUrl,
+            submitted_by: userRole == 'independent' ? 'artist' : userRole,
+            is_approved: 0,
+            is_top100: 0,
+            release_date: formData.release_date,
         };
 
         try {
@@ -211,37 +216,37 @@ export default function MainSongCreate() {
                     <h1 className="text-3xl font-bold mb-6">Upload New Song</h1>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="bg-white p-6 rounded-xl border shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Audio File *</label>
-                                <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Audio File *</label>
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition-colors">
                                     <input type="file" accept="audio/*" onChange={handleAudioChange} className="hidden" id="audio-input" />
-                                    <label htmlFor="audio-input" className="cursor-pointer">
-                                        {isUploadingAudio ? "Uploading..." : audioFileUrl ? "Audio Uploaded ✓" : "Click to select audio"}
+                                    <label htmlFor="audio-input" className="cursor-pointer text-sm text-gray-600">
+                                        {isUploadingAudio ? "Uploading..." : audioFileUrl ? <span className="text-green-600">Audio Uploaded ✓</span> : "Click to select audio"}
                                     </label>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Cover Image</label>
-                                <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image</label>
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition-colors">
                                     <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="image-input" />
-                                    <label htmlFor="image-input" className="cursor-pointer flex flex-col items-center">
-                                        {coverImagePreview && <img src={coverImagePreview} className="h-20 w-20 object-cover mb-2" />}
+                                    <label htmlFor="image-input" className="cursor-pointer flex flex-col items-center text-sm text-gray-600">
+                                        {coverImagePreview && <img src={coverImagePreview} className="h-20 w-20 object-cover mb-2 rounded" />}
                                         {isUploadingImage ? "Uploading..." : "Select image"}
                                     </label>
                                 </div>
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-medium mb-1">Title *</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                                 <Input required name="title" value={formData.title} onChange={handleChange} placeholder="Song title" />
                             </div>
 
                             {userRole === "label" && (
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Artist *</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Artist *</label>
                                     <select
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                                         required
                                         name="artist_id"
                                         value={formData.artist_id}
@@ -254,9 +259,9 @@ export default function MainSongCreate() {
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Genre *</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Genre *</label>
                                 <select
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                                     required
                                     name="genre"
                                     value={formData.genre}
@@ -268,9 +273,9 @@ export default function MainSongCreate() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Album</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Album</label>
                                 <select
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                                     name="album_id"
                                     value={formData.album_id}
                                     onChange={handleChange}
@@ -281,17 +286,22 @@ export default function MainSongCreate() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Duration (e.g. 3:45)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Duration (e.g. 3:45)</label>
                                 <Input name="duration" value={formData.duration} onChange={handleChange} placeholder="3:45" />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Release Date</label>
+                                <Input type="date" name="release_date" value={formData.release_date} onChange={handleChange} />
                             </div>
                         </div>
 
                         <div className="flex justify-end gap-3">
-                            <button type="button" onClick={() => router.back()} className="px-4 py-2 text-gray-600">Cancel</button>
+                            <button type="button" onClick={() => router.back()} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
                             <button
                                 type="submit"
                                 disabled={isLoading || isUploadingAudio || isUploadingImage}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                             >
                                 {isLoading ? "Saving..." : "Upload Song"}
                             </button>
