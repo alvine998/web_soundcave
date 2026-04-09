@@ -94,6 +94,7 @@ export default function Layout({ children }: LayoutProps) {
   const menuItems = [
     { name: "Dashboard", path: "/dashboard", icon: "📊" },
     // { name: 'Analytics', path: '/analytics', icon: '📈' },
+    { name: "Live Broadcast", path: "/main/broadcast", icon: "📡" },
     { name: "Genres", path: "/genres", icon: "🎼" },
     { name: "Artists", path: "/artists", icon: "🎤" },
     { name: "Albums", path: "/albums", icon: "💿" },
@@ -149,8 +150,8 @@ export default function Layout({ children }: LayoutProps) {
               key={item.path}
               onClick={() => router.push(item.path)}
               className={`w-full flex items-center px-6 py-3 text-left transition-colors ${router.pathname === item.path
-                  ? "bg-blue-50 text-blue-600 border-r-4 border-blue-600"
-                  : "text-gray-700 hover:bg-gray-50"
+                ? "bg-blue-50 text-blue-600 border-r-4 border-blue-600"
+                : "text-gray-700 hover:bg-gray-50"
                 }`}
             >
               <span className="text-xl">{item.icon}</span>
@@ -273,12 +274,12 @@ export default function Layout({ children }: LayoutProps) {
                             {/* Icon */}
                             <div
                               className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${notification.type === "success"
-                                  ? "bg-green-100 text-green-600"
-                                  : notification.type === "warning"
-                                    ? "bg-yellow-100 text-yellow-600"
-                                    : notification.type === "error"
-                                      ? "bg-red-100 text-red-600"
-                                      : "bg-blue-100 text-blue-600"
+                                ? "bg-green-100 text-green-600"
+                                : notification.type === "warning"
+                                  ? "bg-yellow-100 text-yellow-600"
+                                  : notification.type === "error"
+                                    ? "bg-red-100 text-red-600"
+                                    : "bg-blue-100 text-blue-600"
                                 }`}
                             >
                               {notification.type === "success" ? (
