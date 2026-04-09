@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import MainLayout from "@/components/MainLayout";
 import { Input } from "@/components/ui/input";
 import axios from "axios";
 import { CONFIG } from "@/config";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
+import Layout from "@/components/Layout";
 
 interface StreamData {
   id: number;
@@ -23,11 +23,11 @@ export default function BroadcastPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [userRole, setUserRole] = useState("");
-  
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -51,7 +51,7 @@ export default function BroadcastPage() {
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setUserRole(user.role);
-      
+
       if (user.role !== "admin") {
         router.push("/main/dashboard");
         return;
@@ -60,7 +60,7 @@ export default function BroadcastPage() {
       router.push("/");
       return;
     }
-    
+
     setIsInitialized(true);
 
     return () => {
@@ -73,9 +73,9 @@ export default function BroadcastPage() {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: 1280, height: 720, facingMode: "user" }, 
-        audio: true 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: "user" },
+        audio: true
       });
       setMediaStream(stream);
       return stream;
@@ -99,7 +99,7 @@ export default function BroadcastPage() {
     if (socketUrl.endsWith("/api")) {
       socketUrl = socketUrl.replace("/api", "");
     }
-    
+
     socketRef.current = io(socketUrl);
 
     socketRef.current.emit("start_web_broadcast", { streamKey: strmKey });
@@ -157,7 +157,7 @@ export default function BroadcastPage() {
       const file = e.target.files[0];
       setThumbnailPreview(URL.createObjectURL(file));
       setIsUploadingThumbnail(true);
-      
+
       const uploadData = new FormData();
       uploadData.append("file", file);
       uploadData.append("folder", "broadcast-thumbnails");
@@ -187,7 +187,7 @@ export default function BroadcastPage() {
     if (formData.broadcastType === "scheduled" && !formData.scheduledAt) {
       return toast.error("Please select a date and time for the scheduled broadcast.");
     }
-    
+
     const isNow = formData.broadcastType === "now";
 
     let streamToUse = mediaStream;
@@ -206,13 +206,13 @@ export default function BroadcastPage() {
         thumbnail: formData.thumbnail,
         stream_url: "rtmp://154.26.137.37:1935/live", // Keep for backend consistency
       };
-      
+
       if (!isNow) {
         payload.scheduled_at = new Date(formData.scheduledAt).toISOString();
       }
 
       const response = await axios.post(`${CONFIG.API_URL}/api/artist-streams/start`, payload, getAuthHeaders());
-      
+
       if (response.data?.success) {
         if (isNow) {
           setActiveStream(response.data.data);
@@ -275,7 +275,7 @@ export default function BroadcastPage() {
       <Head>
         <title>Live Studio - SoundCave</title>
       </Head>
-      <MainLayout>
+      <Layout>
         <div className="p-6 max-w-5xl mx-auto">
           <div className="mb-8 flex justify-between items-end">
             <div>
@@ -311,24 +311,24 @@ export default function BroadcastPage() {
                       <label className="block text-sm font-bold text-gray-700 mb-2">Broadcast Type</label>
                       <div className="flex space-x-6">
                         <label className="flex items-center space-x-2 cursor-pointer">
-                          <input 
-                            type="radio" 
-                            name="broadcastType" 
-                            value="now" 
-                            checked={formData.broadcastType === "now"} 
-                            onChange={handleChange} 
-                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" 
+                          <input
+                            type="radio"
+                            name="broadcastType"
+                            value="now"
+                            checked={formData.broadcastType === "now"}
+                            onChange={handleChange}
+                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span className="text-gray-700 font-medium">Go Live Now</span>
                         </label>
                         <label className="flex items-center space-x-2 cursor-pointer">
-                          <input 
-                            type="radio" 
-                            name="broadcastType" 
-                            value="scheduled" 
-                            checked={formData.broadcastType === "scheduled"} 
-                            onChange={handleChange} 
-                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" 
+                          <input
+                            type="radio"
+                            name="broadcastType"
+                            value="scheduled"
+                            checked={formData.broadcastType === "scheduled"}
+                            onChange={handleChange}
+                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span className="text-gray-700 font-medium">Schedule for Later</span>
                         </label>
@@ -374,17 +374,16 @@ export default function BroadcastPage() {
 
                   <div className="space-y-6">
                     <label className="block text-sm font-bold text-gray-700 mb-2">Cover Image</label>
-                    <div 
-                      className={`relative border-2 border-dashed rounded-3xl p-6 text-center transition-all min-h-[280px] flex flex-col items-center justify-center ${
-                        thumbnailPreview ? 'border-indigo-400 bg-indigo-50/30' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400'
-                      }`}
+                    <div
+                      className={`relative border-2 border-dashed rounded-3xl p-6 text-center transition-all min-h-[280px] flex flex-col items-center justify-center ${thumbnailPreview ? 'border-indigo-400 bg-indigo-50/30' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400'
+                        }`}
                     >
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleThumbnailChange} 
-                        className="hidden" 
-                        id="thumb-input" 
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleThumbnailChange}
+                        className="hidden"
+                        id="thumb-input"
                       />
                       <label htmlFor="thumb-input" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
                         {thumbnailPreview ? (
@@ -443,15 +442,15 @@ export default function BroadcastPage() {
               {/* Main Preview */}
               <div className="lg:col-span-3 space-y-6">
                 <div className="aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl relative border-4 border-gray-900 ring-1 ring-white/10">
-                  <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    muted 
-                    playsInline 
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
                     className="w-full h-full object-cover mirror-mode"
                     style={{ transform: 'scaleX(-1)' }}
                   />
-                  
+
                   {/* Overlay UI */}
                   <div className="absolute inset-0 p-6 flex flex-col justify-between pointer-events-none">
                     <div className="flex justify-between items-start">
@@ -463,7 +462,7 @@ export default function BroadcastPage() {
                         720p HD · 30 FPS
                       </div>
                     </div>
-                    
+
                     <div className="flex items-end justify-between">
                       <div className="bg-black/60 backdrop-blur-xl p-4 rounded-2xl border border-white/10 max-w-[70%]">
                         <h3 className="text-white font-black text-lg leading-tight truncate">{activeStream.title}</h3>
@@ -484,13 +483,13 @@ export default function BroadcastPage() {
                       <span className="text-xs font-bold">Webcam Active</span>
                     </div>
                   </div>
-                  
+
                   <button
                     onClick={handleEndStream}
                     disabled={isLoading}
                     className="px-8 py-3 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 rounded-xl transition-all font-black text-sm flex items-center shadow-sm group"
                   >
-                    <span className="mr-3 transition-transform group-hover:rotate-90">⏹️</span> 
+                    <span className="mr-3 transition-transform group-hover:rotate-90">⏹️</span>
                     {isLoading ? "Ending..." : "END BROADCAST"}
                   </button>
                 </div>
@@ -523,7 +522,7 @@ export default function BroadcastPage() {
                     <img src={activeStream.thumbnail} className="w-full h-auto rounded-2xl shadow-sm border border-gray-50" alt="Thumbnail" />
                   </div>
                 )}
-                
+
                 <div className="p-6 bg-yellow-50 rounded-3xl border border-yellow-100 text-yellow-800 text-[10px] font-bold leading-relaxed shadow-inner">
                   <span className="text-base mr-1">⚠️</span>
                   DO NOT REFRESH the page while live, or you may need to restart the session.
@@ -532,7 +531,7 @@ export default function BroadcastPage() {
             </div>
           )}
         </div>
-      </MainLayout>
+      </Layout>
     </>
   );
 }

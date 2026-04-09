@@ -94,7 +94,7 @@ export default function Layout({ children }: LayoutProps) {
   const menuItems = [
     { name: "Dashboard", path: "/dashboard", icon: "📊" },
     // { name: 'Analytics', path: '/analytics', icon: '📈' },
-    { name: "Live Broadcast", path: "/main/broadcast", icon: "📡" },
+    { name: "Live Broadcast", path: "/broadcast", icon: "📡" },
     { name: "Genres", path: "/genres", icon: "🎼" },
     { name: "Artists", path: "/artists", icon: "🎤" },
     { name: "Albums", path: "/albums", icon: "💿" },
