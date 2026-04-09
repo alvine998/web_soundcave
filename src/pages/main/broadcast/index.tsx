@@ -110,11 +110,12 @@ export default function BroadcastPage() {
       });
       mediaRecorderRef.current = mediaRecorder;
 
-      mediaRecorder.ondataavailable = (e) => {
+      mediaRecorder.ondataavailable = async (e) => {
         if (e.data && e.data.size > 0 && socketRef.current) {
+          const arrayBuffer = await e.data.arrayBuffer();
           socketRef.current.emit("web_broadcast_chunk", {
             streamKey: strmKey,
-            chunk: e.data
+            chunk: arrayBuffer
           });
         }
       };
