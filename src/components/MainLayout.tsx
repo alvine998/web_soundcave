@@ -40,7 +40,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
         ...(userRole === "label" ? [{ name: "Artists", path: "/main/artist", icon: "🎤" }] : []),
         { name: "Albums", path: "/main/album", icon: "💿" },
         { name: "Songs", path: "/main/song", icon: "🎵" },
-        { name: "Music Videos", path: "/main/music-video", icon: "🎬" },
+        // { name: "Music Videos", path: "/main/music-video", icon: "🎬" },
         { name: "Notifications", path: "/main/notification", icon: "🔔" },
         { name: "Profile", path: "/main/profile", icon: "👤" },
     ];
