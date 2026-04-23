@@ -14,6 +14,7 @@ interface StreamData {
   thumbnail: string;
   ingest_url: string;
   stream_key: string;
+  web_rtc_url: string;
   status: string;
 }
 
@@ -105,7 +106,7 @@ export default function BroadcastPage() {
 
   const startWebBroadcast = async (
     streamId: number,
-    strmKey: string,
+    web_rtc_url: string,
     stream: MediaStream,
   ): Promise<void> => {
     const pc = new RTCPeerConnection({
@@ -151,19 +152,8 @@ export default function BroadcastPage() {
       });
     });
 
-    const srsHost = "154.26.137.37";
-    // try {
-    //   const u = new URL(CONFIG.API_URL);
-    //   srsHost = u.hostname;
-    // } catch (_) {}
-
-    const whipBase =
-      process.env.NEXT_PUBLIC_SRS_WHIP_URL ||
-      `http://${srsHost}:1985/rtc/v1/whip/`;
-    const whipUrl = `${whipBase}?app=live&stream=${strmKey}`;
-
-    console.log("Sending WHIP offer to:", whipUrl);
-    const res = await fetch(whipUrl, {
+    console.log("Sending WHIP offer to:", web_rtc_url);
+    const res = await fetch(web_rtc_url, {
       method: "POST",
       headers: { "Content-Type": "application/sdp" },
       body: pc.localDescription!.sdp,
@@ -175,7 +165,7 @@ export default function BroadcastPage() {
 
     const answerSdp = await res.text();
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-    console.log("WHIP broadcast started for:", strmKey);
+    console.log("WHIP broadcast started for:", web_rtc_url);
 
     // Notify backend so it marks status as live
     const token =
@@ -189,12 +179,12 @@ export default function BroadcastPage() {
     console.log("mark-live called for stream:", streamId);
   };
 
-  const stopWebBroadcast = (strmKey: string) => {
+  const stopWebBroadcast = () => {
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
-    console.log("Web broadcast stopped for:", strmKey);
+    console.log("Web broadcast stopped.");
   };
 
   useEffect(() => {
@@ -312,7 +302,7 @@ export default function BroadcastPage() {
             // Fire WHIP without blocking isLoading so End button is usable immediately
             startWebBroadcast(
               response.data.data.id,
-              response.data.data.stream_key,
+              response.data.data.web_rtc_url,
               streamToUse!,
             )
               .then(() => {
@@ -366,7 +356,7 @@ export default function BroadcastPage() {
         getAuthHeaders(),
       );
       if (response.data?.success) {
-        stopWebBroadcast(activeStream.stream_key);
+        stopWebBroadcast();
         stopCamera();
         setActiveStream(null);
         toast.success("Broadcast ended successfully.");
