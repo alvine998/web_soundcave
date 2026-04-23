@@ -1,17 +1,15 @@
 # Stage 1: Dependencies
 FROM node:20-alpine AS deps
-RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # Copy package files
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -22,7 +20,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
 
 # Build the application
-RUN pnpm build
+RUN npm run build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
