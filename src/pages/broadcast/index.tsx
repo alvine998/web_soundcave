@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import axios from "axios";
 import { CONFIG } from "@/config";
 import toast from "react-hot-toast";
-import { io } from "socket.io-client";
 import Layout from "@/components/Layout";
 
 interface StreamData {
@@ -21,29 +20,38 @@ interface StreamData {
 export default function BroadcastPage() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const socketRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [userRole, setUserRole] = useState("");
 
   const [formData, setFormData] = useState({
-    title: "",
+    stream_key: "",
     description: "",
     thumbnail: "",
     broadcastType: "now",
     scheduledAt: "",
+    title: "",
   });
 
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [activeStream, setActiveStream] = useState<StreamData | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [broadcastMode, setBroadcastMode] = useState<"web" | "obs">("web");
 
   const getAuthHeaders = () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("soundcave_token") : null;
-    return { headers: { Authorization: token ? `Bearer ${token}` : "", "Content-Type": "application/json" } };
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("soundcave_token")
+        : null;
+    return {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+    };
   };
 
   useEffect(() => {
@@ -66,7 +74,7 @@ export default function BroadcastPage() {
     return () => {
       // Cleanup camera on unmount
       if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [mediaStream]);
@@ -75,70 +83,118 @@ export default function BroadcastPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720, facingMode: "user" },
-        audio: true
+        audio: true,
       });
       setMediaStream(stream);
       return stream;
     } catch (err) {
       console.error("Error accessing camera:", err);
-      toast.error("Could not access camera/microphone. Please check permissions.");
+      toast.error(
+        "Could not access camera/microphone. Please check permissions.",
+      );
       return null;
     }
   };
 
   const stopCamera = () => {
     if (mediaStream) {
-      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream.getTracks().forEach((track) => track.stop());
       setMediaStream(null);
     }
   };
 
-  const startWebBroadcast = (strmKey: string, stream: MediaStream) => {
-    // Determine socket URL from CONFIG.API_URL
-    let socketUrl = CONFIG.API_URL;
-    if (socketUrl.endsWith("/api")) {
-      socketUrl = socketUrl.replace("/api", "");
+  const startWebBroadcast = async (
+    streamId: number,
+    strmKey: string,
+    stream: MediaStream,
+  ): Promise<void> => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+    peerConnectionRef.current = pc;
+
+    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+    // Force H.264 so SRS can transcode to HLS without needing VP8/VP9 support
+    if (typeof RTCRtpSender.getCapabilities === "function") {
+      const caps = RTCRtpSender.getCapabilities("video");
+      if (caps) {
+        const h264 = caps.codecs.filter(
+          (c) => c.mimeType.toLowerCase() === "video/h264",
+        );
+        if (h264.length > 0) {
+          const transceiver = pc
+            .getTransceivers()
+            .find((t) => t.sender.track?.kind === "video");
+          if (transceiver) {
+            transceiver.setCodecPreferences(h264);
+          }
+        }
+      }
     }
 
-    socketRef.current = io(socketUrl);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
 
-    socketRef.current.emit("start_web_broadcast", { streamKey: strmKey });
-
-    socketRef.current.on("web_broadcast_ready", () => {
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp8,opus'
-      });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = async (e) => {
-        if (e.data && e.data.size > 0 && socketRef.current) {
-          const arrayBuffer = await e.data.arrayBuffer();
-          socketRef.current.emit("web_broadcast_chunk", {
-            streamKey: strmKey,
-            chunk: arrayBuffer
-          });
+    // Wait for ICE gathering to complete (max 3s)
+    await new Promise<void>((resolve) => {
+      if (pc.iceGatheringState === "complete") {
+        resolve();
+        return;
+      }
+      const timeout = setTimeout(resolve, 3000);
+      pc.addEventListener("icegatheringstatechange", () => {
+        if (pc.iceGatheringState === "complete") {
+          clearTimeout(timeout);
+          resolve();
         }
-      };
-
-      mediaRecorder.start(500); // Send chunks every 500ms
+      });
     });
 
-    socketRef.current.on("web_broadcast_error", (data: any) => {
-      console.error("Backend ffmpeg stream err:", data?.message);
-      toast.error("Stream dropped: " + data?.message);
-      handleEndStreamInternal();
+    const srsHost = "154.26.137.37";
+    // try {
+    //   const u = new URL(CONFIG.API_URL);
+    //   srsHost = u.hostname;
+    // } catch (_) {}
+
+    const whipBase =
+      process.env.NEXT_PUBLIC_SRS_WHIP_URL ||
+      `http://${srsHost}:1985/rtc/v1/whip/`;
+    const whipUrl = `${whipBase}?app=live&stream=${strmKey}`;
+
+    console.log("Sending WHIP offer to:", whipUrl);
+    const res = await fetch(whipUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: pc.localDescription!.sdp,
     });
+
+    if (!res.ok) {
+      throw new Error(`WHIP error: ${res.status} ${res.statusText}`);
+    }
+
+    const answerSdp = await res.text();
+    await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+    console.log("WHIP broadcast started for:", strmKey);
+
+    // Notify backend so it marks status as live
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("soundcave_token")
+        : null;
+    await fetch(`${CONFIG.API_URL}/api/artist-streams/${streamId}/mark-live`, {
+      method: "POST",
+      headers: { Authorization: token ? `Bearer ${token}` : "" },
+    });
+    console.log("mark-live called for stream:", streamId);
   };
 
   const stopWebBroadcast = (strmKey: string) => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
     }
-    if (socketRef.current) {
-      socketRef.current.emit("stop_web_broadcast", { streamKey: strmKey });
-      socketRef.current.disconnect();
-      socketRef.current = null;
-    }
+    console.log("Web broadcast stopped for:", strmKey);
   };
 
   useEffect(() => {
@@ -147,12 +203,18 @@ export default function BroadcastPage() {
     }
   }, [mediaStream, activeStream]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setThumbnailPreview(URL.createObjectURL(file));
@@ -163,14 +225,21 @@ export default function BroadcastPage() {
       uploadData.append("folder", "broadcast-thumbnails");
 
       try {
-        const response = await axios.post(`${CONFIG.API_URL}/api/images/upload`, uploadData, {
-          headers: {
-            ...getAuthHeaders().headers,
-            "Content-Type": "multipart/form-data",
+        const response = await axios.post(
+          `${CONFIG.API_URL}/api/images/upload`,
+          uploadData,
+          {
+            headers: {
+              ...getAuthHeaders().headers,
+              "Content-Type": "multipart/form-data",
+            },
           },
-        });
+        );
         if (response.data?.success) {
-          setFormData(prev => ({ ...prev, thumbnail: response.data.data.file_url }));
+          setFormData((prev) => ({
+            ...prev,
+            thumbnail: response.data.data.file_url,
+          }));
           toast.success("Thumbnail uploaded!");
         }
       } catch (err) {
@@ -185,13 +254,15 @@ export default function BroadcastPage() {
     e.preventDefault();
     if (!formData.title) return toast.error("Please enter a title.");
     if (formData.broadcastType === "scheduled" && !formData.scheduledAt) {
-      return toast.error("Please select a date and time for the scheduled broadcast.");
+      return toast.error(
+        "Please select a date and time for the scheduled broadcast.",
+      );
     }
 
     const isNow = formData.broadcastType === "now";
 
     let streamToUse = mediaStream;
-    if (isNow) {
+    if (isNow && broadcastMode === "web") {
       if (!streamToUse) {
         streamToUse = await startCamera();
         if (!streamToUse) return;
@@ -200,29 +271,68 @@ export default function BroadcastPage() {
 
     setIsLoading(true);
     try {
+      // Extract host from API_URL for dynamic RTMP source
+      let rtmpHost = "154.26.137.37";
+      try {
+        const u = new URL(CONFIG.API_URL);
+        rtmpHost = u.hostname;
+      } catch (e) {
+        console.warn("Could not parse API_URL host, using fallback RTMP host");
+      }
+
       const payload: any = {
         title: formData.title,
-        description: formData.description || formData.title,
+        description: formData.description || formData.stream_key,
         thumbnail: formData.thumbnail,
-        stream_url: "rtmp://154.26.137.37:1935/live", // Keep for backend consistency
+        stream_url: `rtmp://${rtmpHost}:1935/live`, // Dynamic based on API_URL
+        live_from: "web",
       };
 
       if (!isNow) {
         payload.scheduled_at = new Date(formData.scheduledAt).toISOString();
       }
 
-      const response = await axios.post(`${CONFIG.API_URL}/api/artist-streams/start`, payload, getAuthHeaders());
+      console.log("Starting broadcast with payload:", payload);
+      console.log("API URL:", `${CONFIG.API_URL}/api/artist-streams/start`);
+
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/artist-streams/start`,
+        payload,
+        getAuthHeaders(),
+      );
+
+      console.log("Start broadcast response:", response.data);
 
       if (response.data?.success) {
         if (isNow) {
           setActiveStream(response.data.data);
-          startWebBroadcast(response.data.data.stream_key, streamToUse!);
-          toast.success("Broadcast started! You are now live.");
+          console.log("Active stream set:", response.data.data);
+
+          if (broadcastMode === "web") {
+            // Fire WHIP without blocking isLoading so End button is usable immediately
+            startWebBroadcast(
+              response.data.data.id,
+              response.data.data.stream_key,
+              streamToUse!,
+            )
+              .then(() => {
+                setActiveStream((prev) =>
+                  prev ? { ...prev, status: "live" } : prev,
+                );
+              })
+              .catch((err: any) => {
+                toast.error(err?.message || "WHIP connection failed.");
+                stopCamera();
+                setActiveStream(null);
+              });
+          }
+
+          toast.success("Broadcast session generated!");
         } else {
           toast.success("Broadcast scheduled successfully!");
-          setFormData(prev => ({
+          setFormData((prev) => ({
             ...prev,
-            title: "",
+            stream_key: "",
             description: "",
             broadcastType: "now",
             scheduledAt: "",
@@ -237,7 +347,9 @@ export default function BroadcastPage() {
       if (err?.response?.status === 409) {
         toast.error("An active stream already exists. Please end it first.");
       } else {
-        toast.error(err?.response?.data?.message || "Failed to start broadcast.");
+        toast.error(
+          err?.response?.data?.message || "Failed to start broadcast.",
+        );
       }
     } finally {
       setIsLoading(false);
@@ -248,7 +360,11 @@ export default function BroadcastPage() {
     if (!activeStream) return;
     setIsLoading(true);
     try {
-      const response = await axios.post(`${CONFIG.API_URL}/api/artist-streams/end/${activeStream.id}`, {}, getAuthHeaders());
+      const response = await axios.post(
+        `${CONFIG.API_URL}/api/artist-streams/end/${activeStream.id}`,
+        {},
+        getAuthHeaders(),
+      );
       if (response.data?.success) {
         stopWebBroadcast(activeStream.stream_key);
         stopCamera();
@@ -277,15 +393,27 @@ export default function BroadcastPage() {
       </Head>
       <Layout>
         <div className="p-6 max-w-5xl mx-auto">
-          <div className="mb-8 flex justify-between items-end">
+          <div className="mb-8">
+            <button
+              onClick={() => router.push("/broadcast/list")}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              ← Back to Broadcasts
+            </button>
+          </div>
+          <div className="mb-4 flex justify-between items-end">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Live Studio</h1>
-              <p className="text-gray-600">Broadcast your talent directly from your browser.</p>
+              <h1 className="text-3xl font-bold text-gray-900">Live Studio</h1>
+              <p className="text-gray-600">
+                Broadcast your talent directly from your browser.
+              </p>
             </div>
             {activeStream && (
               <div className="flex items-center space-x-2 bg-red-50 px-3 py-1 rounded-full border border-red-100">
                 <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
-                <span className="text-xs font-bold text-red-700 uppercase">Live</span>
+                <span className="text-xs font-bold text-red-700 uppercase">
+                  Live
+                </span>
               </div>
             )}
           </div>
@@ -298,8 +426,12 @@ export default function BroadcastPage() {
                     <span className="text-2xl">📹</span>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900">Prepare Your Stream</h2>
-                    <p className="text-sm text-gray-600">Set up your camera and broadcast details.</p>
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Prepare Your Stream
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      Set up your camera and broadcast details.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -308,7 +440,39 @@ export default function BroadcastPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Broadcast Type</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        Broadcast Studio Mode
+                      </label>
+                      <div className="flex space-x-2 bg-gray-100 p-1 rounded-2xl mb-4">
+                        <button
+                          type="button"
+                          onClick={() => setBroadcastMode("web")}
+                          className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${
+                            broadcastMode === "web"
+                              ? "bg-white text-indigo-600 shadow-sm"
+                              : "text-gray-500 hover:text-gray-700"
+                          }`}
+                        >
+                          🌐 Browser Studio
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBroadcastMode("obs")}
+                          className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${
+                            broadcastMode === "obs"
+                              ? "bg-white text-indigo-600 shadow-sm"
+                              : "text-gray-500 hover:text-gray-700"
+                          }`}
+                        >
+                          🎥 OBS / Professional
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        Broadcast Time
+                      </label>
                       <div className="flex space-x-6">
                         <label className="flex items-center space-x-2 cursor-pointer">
                           <input
@@ -319,7 +483,9 @@ export default function BroadcastPage() {
                             onChange={handleChange}
                             className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                           />
-                          <span className="text-gray-700 font-medium">Go Live Now</span>
+                          <span className="text-gray-700 font-medium">
+                            Go Live Now
+                          </span>
                         </label>
                         <label className="flex items-center space-x-2 cursor-pointer">
                           <input
@@ -330,14 +496,18 @@ export default function BroadcastPage() {
                             onChange={handleChange}
                             className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                           />
-                          <span className="text-gray-700 font-medium">Schedule for Later</span>
+                          <span className="text-gray-700 font-medium">
+                            Schedule for Later
+                          </span>
                         </label>
                       </div>
                     </div>
 
                     {formData.broadcastType === "scheduled" && (
                       <div className="animate-in fade-in duration-300">
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Scheduled Date & Time *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Scheduled Date & Time *
+                        </label>
                         <Input
                           type="datetime-local"
                           required={formData.broadcastType === "scheduled"}
@@ -350,7 +520,9 @@ export default function BroadcastPage() {
                     )}
 
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Stream Title *</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        Stream Title *
+                      </label>
                       <Input
                         required
                         name="title"
@@ -361,7 +533,9 @@ export default function BroadcastPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Description</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        Description
+                      </label>
                       <textarea
                         name="description"
                         value={formData.description}
@@ -373,10 +547,15 @@ export default function BroadcastPage() {
                   </div>
 
                   <div className="space-y-6">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Cover Image</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Cover Image
+                    </label>
                     <div
-                      className={`relative border-2 border-dashed rounded-3xl p-6 text-center transition-all min-h-[280px] flex flex-col items-center justify-center ${thumbnailPreview ? 'border-indigo-400 bg-indigo-50/30' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400'
-                        }`}
+                      className={`relative border-2 border-dashed rounded-3xl p-6 text-center transition-all min-h-[280px] flex flex-col items-center justify-center ${
+                        thumbnailPreview
+                          ? "border-indigo-400 bg-indigo-50/30"
+                          : "border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400"
+                      }`}
                     >
                       <input
                         type="file"
@@ -385,12 +564,20 @@ export default function BroadcastPage() {
                         className="hidden"
                         id="thumb-input"
                       />
-                      <label htmlFor="thumb-input" className="cursor-pointer w-full h-full flex flex-col items-center justify-center">
+                      <label
+                        htmlFor="thumb-input"
+                        className="cursor-pointer w-full h-full flex flex-col items-center justify-center"
+                      >
                         {thumbnailPreview ? (
                           <div className="relative group w-full">
-                            <img src={thumbnailPreview} className="h-56 w-full object-cover rounded-2xl shadow-lg border border-white" />
+                            <img
+                              src={thumbnailPreview}
+                              className="h-56 w-full object-cover rounded-2xl shadow-lg border border-white"
+                            />
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center transition-opacity">
-                              <span className="text-white text-sm font-bold bg-white/20 px-4 py-2 rounded-lg backdrop-blur-md">Replace Image</span>
+                              <span className="text-white text-sm font-bold bg-white/20 px-4 py-2 rounded-lg backdrop-blur-md">
+                                Replace Image
+                              </span>
                             </div>
                           </div>
                         ) : (
@@ -398,15 +585,21 @@ export default function BroadcastPage() {
                             <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-gray-100">
                               <span className="text-3xl">🖼️</span>
                             </div>
-                            <span className="text-gray-800 font-bold mb-1">Upload a cover</span>
-                            <p className="text-xs text-gray-500">16:9 ratio recommended</p>
+                            <span className="text-gray-800 font-bold mb-1">
+                              Upload a cover
+                            </span>
+                            <p className="text-xs text-gray-500">
+                              16:9 ratio recommended
+                            </p>
                           </>
                         )}
                       </label>
                       {isUploadingThumbnail && (
                         <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center z-10">
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-3"></div>
-                          <span className="text-sm font-bold text-indigo-600">Uploading...</span>
+                          <span className="text-sm font-bold text-indigo-600">
+                            Uploading...
+                          </span>
                         </div>
                       )}
                     </div>
@@ -416,7 +609,8 @@ export default function BroadcastPage() {
                 <div className="pt-6 border-t border-gray-100 flex items-center justify-between">
                   <div className="flex items-center text-gray-500 text-sm italic">
                     <span className="mr-2">💡</span>
-                    Your browser will ask for camera permission when you click start.
+                    Your browser will ask for camera permission when you click
+                    start.
                   </div>
                   <button
                     type="submit"
@@ -429,9 +623,11 @@ export default function BroadcastPage() {
                         Processing...
                       </>
                     ) : formData.broadcastType === "scheduled" ? (
-                      "SCHEDULE BROADCAST 📅"
+                      "SCHEDULE SESSION 📅"
+                    ) : broadcastMode === "obs" ? (
+                      "GENERATE OBS KEY 🎥"
                     ) : (
-                      "START BROADCAST 🚀"
+                      "START LIVE STUDIO 🚀"
                     )}
                   </button>
                 </div>
@@ -442,55 +638,93 @@ export default function BroadcastPage() {
               {/* Main Preview */}
               <div className="lg:col-span-3 space-y-6">
                 <div className="aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl relative border-4 border-gray-900 ring-1 ring-white/10">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover mirror-mode"
-                    style={{ transform: 'scaleX(-1)' }}
-                  />
+                  {broadcastMode === "web" ? (
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover mirror-mode"
+                      style={{ transform: "scaleX(-1)" }}
+                    />
+                  ) : (
+                    <iframe
+                      src={`/watch/${activeStream.id}?preview=true`}
+                      className="w-full h-full border-none"
+                    />
+                  )}
 
                   {/* Overlay UI */}
                   <div className="absolute inset-0 p-6 flex flex-col justify-between pointer-events-none">
                     <div className="flex justify-between items-start">
-                      <div className="bg-red-600 text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 shadow-lg scale-110 origin-top-left">
-                        <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                        <span className="text-xs font-black uppercase tracking-tighter">LIVE</span>
+                      <div
+                        className={`text-white px-3 py-1.5 rounded-lg flex items-center space-x-2 shadow-lg scale-110 origin-top-left ${
+                          activeStream.status === "live"
+                            ? "bg-red-600"
+                            : "bg-gray-600"
+                        }`}
+                      >
+                        <div
+                          className={`w-2 h-2 bg-white rounded-full ${
+                            activeStream.status === "live"
+                              ? "animate-pulse"
+                              : ""
+                          }`}
+                        ></div>
+                        <span className="text-xs font-black uppercase tracking-tighter">
+                          {activeStream.status === "live"
+                            ? "LIVE"
+                            : "WAITING FOR OBS"}
+                        </span>
                       </div>
                       <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-lg text-white text-[10px] font-bold border border-white/20">
-                        720p HD · 30 FPS
+                        HD Monitoring · Auto Detect
                       </div>
                     </div>
 
                     <div className="flex items-end justify-between">
                       <div className="bg-black/60 backdrop-blur-xl p-4 rounded-2xl border border-white/10 max-w-[70%]">
-                        <h3 className="text-white font-black text-lg leading-tight truncate">{activeStream.title}</h3>
-                        <p className="text-white/60 text-xs truncate">{activeStream.description}</p>
+                        <h3 className="text-white font-black text-lg leading-tight truncate">
+                          {activeStream.title}
+                        </h3>
+                        <p className="text-white/60 text-xs truncate">
+                          {activeStream.description}
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-2 text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg">
-                      <span className="text-lg">🎤</span>
-                      <span className="text-xs font-bold">Audio Active</span>
+                  {broadcastMode === "web" ? (
+                    <div className="flex items-center space-x-6">
+                      <div className="flex items-center space-x-2 text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg">
+                        <span className="text-lg">🎤</span>
+                        <span className="text-xs font-bold">Audio Active</span>
+                      </div>
+                      <div className="flex items-center space-x-2 text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg">
+                        <span className="text-lg">📷</span>
+                        <span className="text-xs font-bold">Webcam Active</span>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2 text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg">
-                      <span className="text-lg">📷</span>
-                      <span className="text-xs font-bold">Webcam Active</span>
+                  ) : (
+                    <div className="flex items-center space-x-2 text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl">
+                      <span className="animate-bounce">🎥</span>
+                      <span className="text-xs font-bold uppercase">
+                        Ready to receive OBS stream
+                      </span>
                     </div>
-                  </div>
+                  )}
 
                   <button
                     onClick={handleEndStream}
                     disabled={isLoading}
                     className="px-8 py-3 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 rounded-xl transition-all font-black text-sm flex items-center shadow-sm group"
                   >
-                    <span className="mr-3 transition-transform group-hover:rotate-90">⏹️</span>
-                    {isLoading ? "Ending..." : "END BROADCAST"}
+                    <span className="mr-3 transition-transform group-hover:rotate-90">
+                      ⏹️
+                    </span>
+                    {isLoading ? "Ending..." : "END SESSION"}
                   </button>
                 </div>
               </div>
@@ -498,34 +732,99 @@ export default function BroadcastPage() {
               {/* Sidebar Info */}
               <div className="space-y-6">
                 <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-4">Stream Info</h3>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-4">
+                    Stream Info
+                  </h3>
                   <div className="space-y-4">
                     <div className="p-3 bg-white/10 rounded-xl border border-white/10">
-                      <p className="text-[10px] text-indigo-300 font-bold uppercase mb-1">Status</p>
-                      <p className="text-sm font-bold">Broadcasting via Web</p>
+                      <p className="text-[10px] text-indigo-300 font-bold uppercase mb-1">
+                        Status
+                      </p>
+                      <p className="text-sm font-bold capitalize">
+                        {broadcastMode === "web"
+                          ? "Broadcasting via Web"
+                          : `External: ${activeStream.status}`}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-white/10 rounded-xl border border-white/10 relative group">
+                      <p className="text-[10px] text-indigo-300 font-bold uppercase mb-1 flex justify-between">
+                        RTMP Server URL
+                        <button
+                          onClick={() => {
+                            const url = activeStream.ingest_url.split(
+                              "/" + activeStream.stream_key,
+                            )[0];
+                            navigator.clipboard.writeText(url);
+                            toast.success("URL Copied!");
+                          }}
+                          className="hover:text-white transition-colors"
+                        >
+                          📋
+                        </button>
+                      </p>
+                      <p className="text-[10px] font-mono break-all select-all pr-6">
+                        {
+                          activeStream.ingest_url.split(
+                            "/" + activeStream.stream_key,
+                          )[0]
+                        }
+                      </p>
+                    </div>
+                    <div className="p-3 bg-white/10 rounded-xl border border-white/10 relative group">
+                      <p className="text-[10px] text-indigo-300 font-bold uppercase mb-1 flex justify-between">
+                        Stream Key
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              activeStream.stream_key,
+                            );
+                            toast.success("Key Copied!");
+                          }}
+                          className="hover:text-white transition-colors"
+                        >
+                          📋
+                        </button>
+                      </p>
+                      <p className="text-[10px] font-mono break-all select-all text-yellow-300 font-bold pr-6">
+                        {activeStream.stream_key}
+                      </p>
                     </div>
                     <div className="p-3 bg-white/10 rounded-xl border border-white/10">
-                      <p className="text-[10px] text-indigo-300 font-bold uppercase mb-1">Platform</p>
-                      <p className="text-sm font-bold text-wrap truncate">SoundCave Web Studio</p>
+                      <p className="text-[10px] text-indigo-300 font-bold uppercase mb-1">
+                        Platform
+                      </p>
+                      <p className="text-sm font-bold text-wrap truncate">
+                        {broadcastMode === "web"
+                          ? "SoundCave Web Studio"
+                          : "OBS Studio / Pro"}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-6 pt-6 border-t border-white/10">
                     <p className="text-[10px] text-indigo-300 font-medium leading-relaxed italic">
-                      Others can join your live stream from the mobile app or web player.
+                      Others can join your live stream from the mobile app or
+                      web player.
                     </p>
                   </div>
                 </div>
 
                 {activeStream.thumbnail && (
                   <div className="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm">
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-3 px-1">Session Cover</p>
-                    <img src={activeStream.thumbnail} className="w-full h-auto rounded-2xl shadow-sm border border-gray-50" alt="Thumbnail" />
+                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-3 px-1">
+                      Session Cover
+                    </p>
+                    <img
+                      src={activeStream.thumbnail}
+                      className="w-full h-auto rounded-2xl shadow-sm border border-gray-50"
+                      alt="Thumbnail"
+                    />
                   </div>
                 )}
 
                 <div className="p-6 bg-yellow-50 rounded-3xl border border-yellow-100 text-yellow-800 text-[10px] font-bold leading-relaxed shadow-inner">
                   <span className="text-base mr-1">⚠️</span>
-                  DO NOT REFRESH the page while live, or you may need to restart the session.
+                  DO NOT REFRESH the page while live, or you may need to restart
+                  the session.
                 </div>
               </div>
             </div>
